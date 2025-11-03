@@ -1,0 +1,85 @@
+"""
+Schemas para usuarios y códigos de acceso.
+"""
+from pydantic import BaseModel, Field, EmailStr, ConfigDict
+from datetime import datetime
+from typing import Optional
+
+
+class UserBase(BaseModel):
+    """Schema base para usuario."""
+    email: EmailStr = Field(..., description="Correo electrónico del usuario")
+    first_name: Optional[str] = Field(None, max_length=100, description="Nombre")
+    last_name: Optional[str] = Field(None, max_length=100, description="Apellido")
+    phone: Optional[str] = Field(None, max_length=30, description="Teléfono")
+    access_level_id: int = Field(..., description="ID del nivel de acceso")
+    access_code_id: Optional[int] = Field(None, description="ID del código de acceso usado al registrarse")
+    is_active: bool = Field(True, description="Estado activo/inactivo")
+
+
+class UserRegister(BaseModel):
+    """Schema para registro de usuario (solo email, password y código)."""
+    email: EmailStr = Field(..., description="Correo electrónico del usuario")
+    password: str = Field(..., min_length=8, description="Contraseña del usuario")
+    access_code_id: int = Field(..., description="ID del código de acceso")
+
+
+class UserCreate(UserBase):
+    """Schema para crear un usuario."""
+    password: str = Field(..., min_length=8, description="Contraseña del usuario")
+
+
+class UserUpdate(BaseModel):
+    """Schema para actualizar un usuario."""
+    email: Optional[EmailStr] = None
+    first_name: Optional[str] = Field(None, max_length=100)
+    last_name: Optional[str] = Field(None, max_length=100)
+    phone: Optional[str] = Field(None, max_length=30)
+    password: Optional[str] = Field(None, min_length=8)
+    access_level_id: Optional[int] = None
+    access_code_id: Optional[int] = None
+    is_active: Optional[bool] = None
+
+
+class UserResponse(UserBase):
+    """Schema de respuesta para usuario."""
+    id: int
+    created_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UserLogin(BaseModel):
+    """Schema para login de usuario."""
+    email: EmailStr = Field(..., description="Correo electrónico")
+    password: str = Field(..., description="Contraseña")
+
+
+class Token(BaseModel):
+    """Schema para token de acceso."""
+    access_token: str
+    token_type: str = "bearer"
+
+
+class AccessCodeBase(BaseModel):
+    """Schema base para código de acceso."""
+    code: str = Field(..., min_length=1, max_length=100, description="Código de acceso")
+    access_level_id: int = Field(..., description="ID del nivel de acceso")
+    is_active: bool = Field(True, description="Estado activo/inactivo")
+
+
+class AccessCodeCreate(AccessCodeBase):
+    """Schema para crear un código de acceso."""
+    pass
+
+
+class AccessCodeResponse(AccessCodeBase):
+    """Schema de respuesta para código de acceso."""
+    id: int
+    created_by: Optional[int] = None
+    created_at: datetime
+    used_by: Optional[int] = None
+    used_at: Optional[datetime] = None
+    
+    model_config = ConfigDict(from_attributes=True)
+
