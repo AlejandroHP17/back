@@ -8,7 +8,9 @@ from app.schemas.catalog import (
     ShiftCreate,
     ShiftResponse,
     AccessLevelCreate,
-    AccessLevelResponse
+    AccessLevelResponse,
+    PeriodCatalogCreate,
+    PeriodCatalogResponse
 )
 from app.schemas.school import (
     SchoolCreate,
@@ -69,6 +71,8 @@ __all__ = [
     "ShiftResponse",
     "AccessLevelCreate",
     "AccessLevelResponse",
+    "PeriodCatalogCreate",
+    "PeriodCatalogResponse",
     "SchoolCreate",
     "SchoolUpdate",
     "SchoolResponse",

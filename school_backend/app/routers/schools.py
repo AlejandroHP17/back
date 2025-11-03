@@ -22,11 +22,11 @@ router = APIRouter(
 async def create_school(
     school_data: SchoolCreate,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_access_level("admin", "super_admin"))]
+    current_user: Annotated[User, Depends(require_access_level("Administrador"))]
 ):
     """
     Crea una nueva escuela.
-    Requiere nivel de acceso: admin o super_admin
+    Requiere nivel de acceso: Administrador
     """
     # Verificar si el CCT ya existe
     existing_school = db.query(School).filter(School.cct == school_data.cct).first()
@@ -67,36 +67,36 @@ async def list_schools(
     return [SchoolResponse.model_validate(school) for school in schools]
 
 
-@router.get("/{school_id}", response_model=SchoolResponse)
+@router.get("/{cct}", response_model=SchoolResponse)
 async def get_school(
-    school_id: int,
+    cct: str,
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_active_user)]
 ):
     """
-    Obtiene una escuela por ID.
+    Obtiene una escuela por CCT (Clave de Centro de Trabajo).
     """
-    school = db.query(School).filter(School.id == school_id).first()
+    school = db.query(School).filter(School.cct == cct).first()
     if not school:
-        raise NotFoundError("Escuela", str(school_id))
+        raise NotFoundError("Escuela", cct)
     
     return SchoolResponse.model_validate(school)
 
 
-@router.put("/{school_id}", response_model=SchoolResponse)
+@router.put("/{cct}", response_model=SchoolResponse)
 async def update_school(
-    school_id: int,
+    cct: str,
     school_data: SchoolUpdate,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_access_level("admin", "super_admin"))]
+    current_user: Annotated[User, Depends(require_access_level("Administrador"))]
 ):
     """
-    Actualiza una escuela.
-    Requiere nivel de acceso: admin o super_admin
+    Actualiza una escuela por CCT (Clave de Centro de Trabajo).
+    Requiere nivel de acceso: Administrador
     """
-    school = db.query(School).filter(School.id == school_id).first()
+    school = db.query(School).filter(School.cct == cct).first()
     if not school:
-        raise NotFoundError("Escuela", str(school_id))
+        raise NotFoundError("Escuela", cct)
     
     # Verificar CCT si se está actualizando
     update_data = school_data.model_dump(exclude_unset=True)
@@ -114,19 +114,19 @@ async def update_school(
     return SchoolResponse.model_validate(school)
 
 
-@router.delete("/{school_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{cct}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_school(
-    school_id: int,
+    cct: str,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_access_level("super_admin"))]
+    current_user: Annotated[User, Depends(require_access_level("Administrador"))]
 ):
     """
-    Elimina una escuela.
-    Requiere nivel de acceso: super_admin
+    Elimina una escuela por CCT (Clave de Centro de Trabajo).
+    Requiere nivel de acceso: Administrador
     """
-    school = db.query(School).filter(School.id == school_id).first()
+    school = db.query(School).filter(School.cct == cct).first()
     if not school:
-        raise NotFoundError("Escuela", str(school_id))
+        raise NotFoundError("Escuela", cct)
     
     db.delete(school)
     db.commit()

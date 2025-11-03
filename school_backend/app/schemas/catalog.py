@@ -58,3 +58,22 @@ class AccessLevelResponse(AccessLevelBase):
     
     model_config = ConfigDict(from_attributes=True)
 
+
+class PeriodCatalogBase(BaseModel):
+    """Schema base para catálogo de periodos."""
+    type_name: str = Field(..., min_length=1, max_length=20, description="Tipo de periodo (ej: Anual, Semestre, Trimestre)")
+    period_number: int = Field(..., ge=1, description="Número del periodo (ej: 1, 2, 3)")
+
+
+class PeriodCatalogCreate(PeriodCatalogBase):
+    """Schema para crear un catálogo de periodo."""
+    pass
+
+
+class PeriodCatalogResponse(PeriodCatalogBase):
+    """Schema de respuesta para catálogo de periodo."""
+    id: int
+    created_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
+

@@ -3,7 +3,7 @@ Script para poblar la base de datos con datos iniciales (catálogos).
 Ejecuta este script después de crear la base de datos.
 """
 from app.database import SessionLocal
-from app.models.catalog import AccessLevel, SchoolType, Shift, School
+from app.models.catalog import AccessLevel, SchoolType, Shift, School, PeriodCatalog
 from app.models.user import User
 from app.security import get_password_hash
 
@@ -16,9 +16,10 @@ def seed_catalog_data():
         existing_levels = db.query(AccessLevel).count()
         existing_types = db.query(SchoolType).count()
         existing_shifts = db.query(Shift).count()
+        existing_periods = db.query(PeriodCatalog).count()
         existing_schools = db.query(School).count()
 
-        if existing_levels > 0 and existing_types > 0 and existing_shifts > 0 and existing_schools > 0:
+        if existing_levels > 0 and existing_types > 0 and existing_shifts > 0 and existing_periods > 0 and existing_schools > 0:
             print("✅ Los catálogos ya están poblados.")
         else:
             print("📦 Poblando catálogos...")
@@ -77,10 +78,40 @@ def seed_catalog_data():
                 db.add(shift)
                 print(f"  ✓ Turno creado: {shift_data['name']}")
         
+        # Catálogo de periodos (debe crearse ANTES de las escuelas para poder referenciarlo)
+        period_catalog_data_list = [
+            {"type_name": "Anual", "period_number": 1},
+            {"type_name": "Semestre", "period_number": 1},
+            {"type_name": "Semestre", "period_number": 2},
+            {"type_name": "Cuatrimestre", "period_number": 1},
+            {"type_name": "Cuatrimestre", "period_number": 2},
+            {"type_name": "Cuatrimestre", "period_number": 3},
+            {"type_name": "Trimestre", "period_number": 1},
+            {"type_name": "Trimestre", "period_number": 2},
+            {"type_name": "Trimestre", "period_number": 3},
+            {"type_name": "Trimestre", "period_number": 4},
+            {"type_name": "Bimestre", "period_number": 1},
+            {"type_name": "Bimestre", "period_number": 2},
+            {"type_name": "Bimestre", "period_number": 3},
+            {"type_name": "Bimestre", "period_number": 4},
+            {"type_name": "Bimestre", "period_number": 5},
+        ]
+        for period_data in period_catalog_data_list:
+            existing = db.query(PeriodCatalog).filter(
+                PeriodCatalog.type_name == period_data["type_name"],
+                PeriodCatalog.period_number == period_data["period_number"]
+            ).first()
+            
+            if not existing:
+                period_catalog = PeriodCatalog(**period_data)
+                db.add(period_catalog)
+                print(f"  ✓ Periodo catalogado creado: {period_data['type_name']} {period_data['period_number']}")
+        
+        # Escuelas (después de crear los periodos para poder asignar period_catalog_id)
         schools = [
-            {"cct": "15EPR0597V", "school_type_id": 1, "name": "Amado Nervo", "postal_code": "54070", "latitude": 19.529961, "longitude": -99.187095, "shift_id": 1},
-            {"cct": "15EPR0596W", "school_type_id": 1, "name": "JAIME NUNO", "postal_code": "54026", "latitude": 19.559397, "longitude": -99.214712, "shift_id": 1},
-            {"cct": "15DPR0906K", "school_type_id": 1, "name": "20 DE NOVIEMBRE", "postal_code": "54140", "latitude": 19.543918, "longitude": -99.154875, "shift_id": 1}
+            {"cct": "15EPR0597V", "school_type_id": 1, "name": "Amado Nervo", "postal_code": "54070", "latitude": 19.529961, "longitude": -99.187095, "shift_id": 1, "period_catalog_id": 4},  # Trimestre 1
+            {"cct": "15EPR0596W", "school_type_id": 1, "name": "JAIME NUNO", "postal_code": "54026", "latitude": 19.559397, "longitude": -99.214712, "shift_id": 1, "period_catalog_id": 4},  # Trimestre 1
+            {"cct": "15DPR0906K", "school_type_id": 1, "name": "20 DE NOVIEMBRE", "postal_code": "54140", "latitude": 19.543918, "longitude": -99.154875, "shift_id": 1, "period_catalog_id": 4}  # Trimestre 1
         ]
         for school_data in schools:
             existing = db.query(School).filter(
@@ -113,12 +144,42 @@ def seed_catalog_data():
         print(f"\n  Turnos: {len(shifts_list)}")
         for shift in shifts_list:
             print(f"    - ID: {shift.id}, Nombre: {shift.name}")
-
+        
+        periods_list = db.query(PeriodCatalog).all()
+        print(f"\n  Catálogo de periodos: {len(periods_list)}")
+        for period in periods_list:
+            print(f"    - ID: {period.id}, Tipo: {period.type_name}, Periodo: {period.period_number}")
 
         schools_list = db.query(School).all()
         print(f"\n  Escuelas: {len(schools_list)}")
+        
+        # Actualizar escuelas existentes que no tienen period_catalog_id
+        schools_updated = False
+        default_period = db.query(PeriodCatalog).filter(
+            PeriodCatalog.type_name == "Trimestre",
+            PeriodCatalog.period_number == 1
+        ).first()
+        
         for school in schools_list:
-            print(f"    - ID: {school.id}, Nombre: {school.name}")
+            # Actualizar escuelas existentes que no tienen period_catalog_id
+            if school.period_catalog_id is None and default_period:
+                school.period_catalog_id = default_period.id
+                db.add(school)
+                schools_updated = True
+            
+            # Mostrar información del periodo
+            period_info = ""
+            if school.period_catalog_id:
+                period = db.query(PeriodCatalog).filter(PeriodCatalog.id == school.period_catalog_id).first()
+                if period:
+                    period_info = f" (Periodo: {period.type_name} {period.period_number})"
+            
+            print(f"    - ID: {school.id}, CCT: {school.cct}, Nombre: {school.name}{period_info}")
+        
+        # Commit de actualizaciones de period_catalog_id
+        if schools_updated:
+            db.commit()
+            print("\n  ✓ Escuelas actualizadas con period_catalog_id")
         
         # Crear usuario administrador por defecto (siempre verificar)
         print("\n👤 Verificando usuario administrador...")

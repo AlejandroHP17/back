@@ -1,7 +1,7 @@
 """
 Modelos para tablas de catálogos (school_types, shifts, access_levels).
 """
-from sqlalchemy import Column, Integer, String, DateTime, Index, BigInteger, DECIMAL, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Index, BigInteger, DECIMAL, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.models.base import Base
@@ -53,6 +53,27 @@ class AccessLevel(Base):
         return f"<AccessLevel(id={self.id}, name='{self.name}')>"
 
 
+class PeriodCatalog(Base):
+    """Modelo para catálogo de periodos."""
+    __tablename__ = "period_catalog"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    type_name = Column(String(20), nullable=False, index=True)
+    period_number = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Restricción única para type_name y period_number
+    __table_args__ = (
+        UniqueConstraint('type_name', 'period_number', name='uk_period_type'),
+    )
+    
+    # Relaciones
+    schools = relationship("School", back_populates="period_catalog")
+    
+    def __repr__(self):
+        return f"<PeriodCatalog(id={self.id}, type_name='{self.type_name}', period_number={self.period_number})>"
+
+
 class School(Base):
     """Modelo para escuelas."""
     __tablename__ = "schools"
@@ -65,11 +86,13 @@ class School(Base):
     latitude = Column(DECIMAL(10, 6), nullable=True)
     longitude = Column(DECIMAL(10, 6), nullable=True)
     shift_id = Column(Integer, ForeignKey("shifts.id"), nullable=True, index=True)
+    period_catalog_id = Column(Integer, ForeignKey("period_catalog.id"), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     
     # Relaciones
     school_type = relationship("SchoolType", back_populates="schools")
     shift = relationship("Shift", back_populates="schools")
+    period_catalog = relationship("PeriodCatalog", back_populates="schools")
     school_cycles = relationship("SchoolCycle", back_populates="school")
     
     def __repr__(self):

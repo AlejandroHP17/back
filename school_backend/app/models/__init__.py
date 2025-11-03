@@ -6,7 +6,8 @@ from app.models.base import Base
 from app.models.catalog import (
     SchoolType,
     Shift,
-    AccessLevel
+    AccessLevel,
+    PeriodCatalog
 )
 from app.models.catalog import School
 from app.models.user import User, AccessCode
@@ -23,6 +24,7 @@ __all__ = [
     "SchoolType",
     "Shift",
     "AccessLevel",
+    "PeriodCatalog",
     "School",
     "User",
     "AccessCode",

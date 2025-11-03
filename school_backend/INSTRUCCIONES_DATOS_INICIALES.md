@@ -53,9 +53,9 @@ ON DUPLICATE KEY UPDATE name = VALUES(name);
 
 -- Catálogos: schools
 INSERT INTO schools (cct, school_type_id, name, postal_code, latitude, longitude, shift_id)
-VALUES ('15EPR0597V', 1, 'Amado Nervo', '54070', 19.529961, -99.187095, 1),
-('15EPR0596W', 1, 'JAIME NUNO', '54026', 19.559397, -99.214712, 1),
-('15DPR0906K', 1, '20 DE NOVIEMBRE', '54140', 19.543918, -99.154875, 1)
+VALUES ('15EPR0597V', 2, 'Amado Nervo', '54070', 19.529961, -99.187095, 1),
+('15EPR0596W', 2, 'JAIME NUNO', '54026', 19.559397, -99.214712, 1),
+('15DPR0906K', 2, '20 DE NOVIEMBRE', '54140', 19.543918, -99.154875, 1)
 ON DUPLICATE KEY UPDATE name = VALUES(name);
 ```
 

@@ -23,6 +23,7 @@ DROP TABLE IF EXISTS schools;
 DROP TABLE IF EXISTS access_levels;
 DROP TABLE IF EXISTS shifts;
 DROP TABLE IF EXISTS school_types;
+DROP TABLE IF EXISTS period_catalog;
 
 SET FOREIGN_KEY_CHECKS = 1;
 
@@ -47,6 +48,16 @@ CREATE TABLE access_levels (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE period_catalog (
+    id TINYINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    type_name VARCHAR(20) NOT NULL, -- Ej: Anual, Semestre, Trimestre
+    period_number TINYINT UNSIGNED NOT NULL, -- Ej: 1, 2, 3
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Restricción para asegurar que no haya, por ejemplo, dos "Semestre" con Periodo 1.
+    UNIQUE KEY uk_period_type (type_name, period_number)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ======================================================
 -- Escuelas
 -- ======================================================
@@ -59,9 +70,11 @@ CREATE TABLE schools (
     latitude DECIMAL(10,6),
     longitude DECIMAL(10,6),
     shift_id TINYINT UNSIGNED,
+    period_catalog_id TINYINT UNSIGNED,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_schools_school_type FOREIGN KEY (school_type_id) REFERENCES school_types(id),
-    CONSTRAINT fk_schools_shift FOREIGN KEY (shift_id) REFERENCES shifts(id)
+    CONSTRAINT fk_schools_shift FOREIGN KEY (shift_id) REFERENCES shifts(id),
+    CONSTRAINT fk_schools_period_catalog FOREIGN KEY (period_catalog_id) REFERENCES period_catalog(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ======================================================

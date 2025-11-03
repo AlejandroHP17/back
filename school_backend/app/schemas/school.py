@@ -15,6 +15,8 @@ class SchoolBase(BaseModel):
     postal_code: Optional[str] = Field(None, max_length=10, description="Código postal")
     latitude: Optional[Decimal] = Field(None, description="Latitud")
     longitude: Optional[Decimal] = Field(None, description="Longitud")
+    shift_id: Optional[int] = Field(None, description="ID del turno")
+    period_catalog_id: Optional[int] = Field(None, description="ID del catálogo de periodo")
 
 
 class SchoolCreate(SchoolBase):
@@ -30,13 +32,14 @@ class SchoolUpdate(BaseModel):
     postal_code: Optional[str] = Field(None, max_length=10)
     latitude: Optional[Decimal] = None
     longitude: Optional[Decimal] = None
+    shift_id: Optional[int] = None
+    period_catalog_id: Optional[int] = None
 
 
 class SchoolResponse(SchoolBase):
     """Schema de respuesta para escuela."""
     id: int
     created_at: datetime
-    updated_at: datetime
     
     model_config = ConfigDict(from_attributes=True)
 
