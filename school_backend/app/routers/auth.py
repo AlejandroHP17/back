@@ -26,7 +26,7 @@ async def register(
 ):
     """
     Registra un nuevo usuario en el sistema.
-    Requiere: email, password y access_code_id.
+    Requiere: email, password y access_code (string, ej: 'PROF2024').
     El access_level_id se obtiene automáticamente del código de acceso.
     """
     # Verificar si el email ya existe
@@ -34,14 +34,14 @@ async def register(
     if existing_user:
         raise ConflictError(f"El email {user_data.email} ya está registrado")
     
-    # Verificar que el código de acceso existe y está activo
+    # Buscar el código de acceso por el string (no por ID)
     from app.models.user import AccessCode
-    access_code = db.query(AccessCode).filter(AccessCode.id == user_data.access_code_id).first()
+    access_code = db.query(AccessCode).filter(AccessCode.code == user_data.access_code).first()
     
     if not access_code:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"El código de acceso con ID {user_data.access_code_id} no existe."
+            detail=f"El código de acceso '{user_data.access_code}' no existe o es inválido."
         )
     
     if not access_code.is_active:
@@ -50,7 +50,9 @@ async def register(
             detail="El código de acceso no está activo."
         )
     
-    if access_code.used_by is not None:
+    # Verificar si el código ya fue usado (buscando usuarios que lo usaron)
+    existing_user_with_code = db.query(User).filter(User.access_code_id == access_code.id).first()
+    if existing_user_with_code:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="El código de acceso ya ha sido utilizado."
@@ -67,17 +69,11 @@ async def register(
         last_name=None,   # Se puede actualizar después
         phone=None,       # Se puede actualizar después
         access_level_id=access_level_id,
-        access_code_id=user_data.access_code_id,
+        access_code_id=access_code.id,  # Usar el ID del código encontrado
         is_active=True
     )
     
     db.add(new_user)
-    db.flush()  # Para obtener el ID del usuario antes del commit
-    
-    # Marcar el código como usado
-    access_code.used_by = new_user.id
-    access_code.used_at = datetime.utcnow()
-    
     db.commit()
     db.refresh(new_user)
     
@@ -105,9 +101,9 @@ async def login(
     if not user.is_active:
         raise UnauthorizedError("Usuario inactivo")
     
-    # Crear token JWT
+    # Crear token JWT (sub debe ser string según JWT spec)
     access_token = create_access_token(
-        data={"sub": user.id, "email": user.email, "access_level_id": user.access_level_id}
+        data={"sub": str(user.id), "email": user.email, "access_level_id": user.access_level_id}
     )
     
     return {

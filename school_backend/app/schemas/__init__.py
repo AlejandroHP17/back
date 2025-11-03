@@ -23,6 +23,7 @@ from app.schemas.user import (
     UserLogin,
     Token,
     AccessCodeCreate,
+    AccessCodeUpdate,
     AccessCodeResponse
 )
 from app.schemas.cycle import (
@@ -78,6 +79,7 @@ __all__ = [
     "UserLogin",
     "Token",
     "AccessCodeCreate",
+    "AccessCodeUpdate",
     "AccessCodeResponse",
     "SchoolCycleCreate",
     "SchoolCycleUpdate",

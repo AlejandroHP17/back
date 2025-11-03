@@ -30,11 +30,6 @@ class User(Base):
         foreign_keys="AccessCode.created_by",
         back_populates="creator"
     )
-    used_access_codes = relationship(
-        "AccessCode",
-        foreign_keys="AccessCode.used_by",
-        back_populates="user"
-    )
     school_cycles = relationship("SchoolCycle", back_populates="teacher")
     work_types = relationship("WorkType", back_populates="teacher")
     student_works = relationship("StudentWork", back_populates="teacher")
@@ -61,13 +56,10 @@ class AccessCode(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     created_by = Column(BigInteger, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    used_by = Column(BigInteger, ForeignKey("users.id"), nullable=True)
-    used_at = Column(DateTime, nullable=True)
     
     # Relaciones
     access_level = relationship("AccessLevel", back_populates="access_codes")
     creator = relationship("User", foreign_keys=[created_by], back_populates="created_access_codes")
-    user = relationship("User", foreign_keys=[used_by], back_populates="used_access_codes")
     users = relationship("User", foreign_keys="User.access_code_id", back_populates="access_code")
     
     def __repr__(self):

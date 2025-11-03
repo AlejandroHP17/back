@@ -21,7 +21,7 @@ class UserRegister(BaseModel):
     """Schema para registro de usuario (solo email, password y código)."""
     email: EmailStr = Field(..., description="Correo electrónico del usuario")
     password: str = Field(..., min_length=8, description="Contraseña del usuario")
-    access_code_id: int = Field(..., description="ID del código de acceso")
+    access_code: str = Field(..., min_length=1, max_length=50, description="Código de acceso (string, ej: 'PROF2024')")
 
 
 class UserCreate(UserBase):
@@ -63,14 +63,22 @@ class Token(BaseModel):
 
 class AccessCodeBase(BaseModel):
     """Schema base para código de acceso."""
-    code: str = Field(..., min_length=1, max_length=100, description="Código de acceso")
+    code: str = Field(..., min_length=1, max_length=50, description="Código de acceso")
     access_level_id: int = Field(..., description="ID del nivel de acceso")
+    description: Optional[str] = Field(None, max_length=255, description="Descripción del código")
     is_active: bool = Field(True, description="Estado activo/inactivo")
 
 
-class AccessCodeCreate(AccessCodeBase):
+class AccessCodeCreate(BaseModel):
     """Schema para crear un código de acceso."""
-    pass
+    code: str = Field(..., min_length=1, max_length=50, description="Código de acceso")
+    access_level_id: int = Field(..., description="ID del nivel de acceso")
+    description: Optional[str] = Field(None, max_length=255, description="Descripción del código")
+
+
+class AccessCodeUpdate(BaseModel):
+    """Schema para actualizar un código de acceso."""
+    is_active: bool = Field(..., description="Estado activo/inactivo")
 
 
 class AccessCodeResponse(AccessCodeBase):
@@ -78,8 +86,6 @@ class AccessCodeResponse(AccessCodeBase):
     id: int
     created_by: Optional[int] = None
     created_at: datetime
-    used_by: Optional[int] = None
-    used_at: Optional[datetime] = None
     
     model_config = ConfigDict(from_attributes=True)
 

@@ -32,11 +32,21 @@ def get_current_user(
     Raises:
         UnauthorizedError: Si el token es inválido o el usuario no existe
     """
-    payload = decode_access_token(token)
-    user_id: Optional[int] = payload.get("sub")
+    # OAuth2PasswordBearer ya extrae el token del header "Authorization: Bearer <token>"
+    # pero limpiamos por si acaso hay espacios adicionales
+    token = token.strip() if token else token
     
-    if user_id is None:
+    payload = decode_access_token(token)
+    user_id_str: Optional[str] = payload.get("sub")
+    
+    if user_id_str is None:
         raise UnauthorizedError("Token inválido")
+    
+    # Convertir string a int (el sub viene como string del token)
+    try:
+        user_id = int(user_id_str)
+    except (ValueError, TypeError):
+        raise UnauthorizedError("Token inválido: ID de usuario inválido")
     
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:

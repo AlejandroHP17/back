@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from app.config import settings
-from app.routers import auth, schools, students, cycles
+from app.routers import auth, schools, students, cycles, control
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -38,6 +38,7 @@ app.include_router(auth.router, prefix="/api")
 app.include_router(schools.router, prefix="/api")
 app.include_router(students.router, prefix="/api")
 app.include_router(cycles.router, prefix="/api")
+app.include_router(control.router, prefix="/api")
 
 
 @app.get("/", tags=["inicio"])
@@ -98,7 +99,19 @@ async def integrity_error_handler(request: Request, exc: IntegrityError):
 @app.exception_handler(SQLAlchemyError)
 async def sqlalchemy_error_handler(request: Request, exc: SQLAlchemyError):
     """Maneja errores generales de SQLAlchemy."""
-    logger.error(f"Error de SQLAlchemy: {str(exc)}")
+    error_msg = str(exc.orig) if hasattr(exc, 'orig') else str(exc)
+    logger.error(f"Error de SQLAlchemy: {error_msg}", exc_info=True)
+    
+    # Si el modo DEBUG está activo, mostrar más detalles
+    if settings.DEBUG:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "detail": f"Error de base de datos: {error_msg}",
+                "error_type": type(exc).__name__
+            }
+        )
+    
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={"detail": "Error de base de datos. Por favor, intenta nuevamente."}
