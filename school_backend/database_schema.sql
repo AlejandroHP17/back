@@ -140,6 +140,7 @@ CREATE TABLE students (
     curp CHAR(18) NOT NULL UNIQUE,
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100) NOT NULL,
+    second_last_name VARCHAR(100) NOT NULL,
     birth_date DATE,
     phone VARCHAR(30),
     teacher_id BIGINT UNSIGNED NOT NULL,    -- profesor que registra / administra

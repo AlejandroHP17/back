@@ -40,6 +40,7 @@ from app.schemas.student import (
 )
 from app.schemas.partial import (
     PartialCreate,
+    PartialCreateList,
     PartialUpdate,
     PartialResponse
 )
@@ -92,6 +93,7 @@ __all__ = [
     "StudentUpdate",
     "StudentResponse",
     "PartialCreate",
+    "PartialCreateList",
     "PartialUpdate",
     "PartialResponse",
     "FormativeFieldCreate",

@@ -15,6 +15,7 @@ class Student(Base):
     curp = Column(String(18), nullable=False, unique=True, index=True)
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), nullable=False)
+    second_last_name = Column(String(100), nullable=False)
     birth_date = Column(Date, nullable=True)
     phone = Column(String(30), nullable=True)
     teacher_id = Column(BigInteger, ForeignKey("users.id"), nullable=False, index=True)
@@ -31,7 +32,7 @@ class Student(Base):
     @property
     def full_name(self) -> str:
         """Retorna el nombre completo del estudiante."""
-        return f"{self.first_name} {self.last_name}".strip()
+        return f"{self.first_name} {self.last_name} {self.second_last_name}".strip()
     
     def __repr__(self):
         return f"<Student(id={self.id}, curp='{self.curp}', full_name='{self.full_name}')>"

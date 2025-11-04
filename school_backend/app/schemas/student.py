@@ -10,7 +10,8 @@ class StudentBase(BaseModel):
     """Schema base para estudiante."""
     curp: str = Field(..., min_length=18, max_length=18, description="CURP del estudiante")
     first_name: str = Field(..., min_length=1, max_length=100, description="Nombre")
-    last_name: str = Field(..., min_length=1, max_length=100, description="Apellido")
+    last_name: str = Field(..., min_length=1, max_length=100, description="Primer apellido")
+    second_last_name: str = Field(..., min_length=1, max_length=100, description="Segundo apellido")
     birth_date: Optional[date] = Field(None, description="Fecha de nacimiento")
     phone: Optional[str] = Field(None, max_length=30, description="Teléfono")
     teacher_id: int = Field(..., description="ID del profesor")
@@ -28,6 +29,7 @@ class StudentUpdate(BaseModel):
     curp: Optional[str] = Field(None, min_length=18, max_length=18)
     first_name: Optional[str] = Field(None, min_length=1, max_length=100)
     last_name: Optional[str] = Field(None, min_length=1, max_length=100)
+    second_last_name: Optional[str] = Field(None, min_length=1, max_length=100)
     birth_date: Optional[date] = None
     phone: Optional[str] = Field(None, max_length=30)
     teacher_id: Optional[int] = None

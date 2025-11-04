@@ -49,7 +49,7 @@ async def list_students(
     current_user: Annotated[User, Depends(get_current_active_user)],
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
-    search: str = Query(None, description="Buscar por nombre, apellido o CURP")
+    search: str = Query(None, description="Buscar por nombre, apellidos o CURP")
 ):
     """
     Lista todos los estudiantes con paginación y búsqueda.
@@ -62,6 +62,7 @@ async def list_students(
             or_(
                 Student.first_name.like(search_pattern),
                 Student.last_name.like(search_pattern),
+                Student.second_last_name.like(search_pattern),
                 Student.curp.like(search_pattern)
             )
         )
@@ -104,8 +105,9 @@ async def update_student(
     update_data = student_data.model_dump(exclude_unset=True)
     if "curp" in update_data and update_data["curp"] and update_data["curp"] != student.curp:
         existing_student = db.query(Student).filter(Student.curp == update_data["curp"]).first()
-        if existing_student:
-            raise ConflictError(f"El CURP {update_data['curp']} ya está registrado")
+        # Solo lanzar error si el CURP existe y pertenece a OTRO estudiante (no al que se está actualizando)
+        if existing_student and existing_student.id != student.id:
+            raise ConflictError(f"El CURP {update_data['curp']} ya está registrado por otro estudiante")
     
     for field, value in update_data.items():
         setattr(student, field, value)

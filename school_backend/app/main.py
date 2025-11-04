@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from app.config import settings
-from app.routers import auth, schools, students, cycles, control
+from app.routers import auth, schools, students, cycles, control, partials, formative_fields
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -38,6 +38,8 @@ app.include_router(auth.router, prefix="/api")
 app.include_router(schools.router, prefix="/api")
 app.include_router(students.router, prefix="/api")
 app.include_router(cycles.router, prefix="/api")
+app.include_router(partials.router, prefix="/api")
+app.include_router(formative_fields.router, prefix="/api")
 app.include_router(control.router, prefix="/api")
 
 
