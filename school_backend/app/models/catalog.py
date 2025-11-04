@@ -68,7 +68,7 @@ class PeriodCatalog(Base):
     )
     
     # Relaciones
-    schools = relationship("School", back_populates="period_catalog")
+    school_cycles = relationship("SchoolCycle", back_populates="period_catalog")
     
     def __repr__(self):
         return f"<PeriodCatalog(id={self.id}, type_name='{self.type_name}', period_number={self.period_number})>"
@@ -86,13 +86,11 @@ class School(Base):
     latitude = Column(DECIMAL(10, 6), nullable=True)
     longitude = Column(DECIMAL(10, 6), nullable=True)
     shift_id = Column(Integer, ForeignKey("shifts.id"), nullable=True, index=True)
-    period_catalog_id = Column(Integer, ForeignKey("period_catalog.id"), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     
     # Relaciones
     school_type = relationship("SchoolType", back_populates="schools")
     shift = relationship("Shift", back_populates="schools")
-    period_catalog = relationship("PeriodCatalog", back_populates="schools")
     school_cycles = relationship("SchoolCycle", back_populates="school")
     
     def __repr__(self):

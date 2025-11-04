@@ -107,11 +107,11 @@ def seed_catalog_data():
                 db.add(period_catalog)
                 print(f"  ✓ Periodo catalogado creado: {period_data['type_name']} {period_data['period_number']}")
         
-        # Escuelas (después de crear los periodos para poder asignar period_catalog_id)
+        # Escuelas
         schools = [
-            {"cct": "15EPR0597V", "school_type_id": 1, "name": "Amado Nervo", "postal_code": "54070", "latitude": 19.529961, "longitude": -99.187095, "shift_id": 1, "period_catalog_id": 4},  # Trimestre 1
-            {"cct": "15EPR0596W", "school_type_id": 1, "name": "JAIME NUNO", "postal_code": "54026", "latitude": 19.559397, "longitude": -99.214712, "shift_id": 1, "period_catalog_id": 4},  # Trimestre 1
-            {"cct": "15DPR0906K", "school_type_id": 1, "name": "20 DE NOVIEMBRE", "postal_code": "54140", "latitude": 19.543918, "longitude": -99.154875, "shift_id": 1, "period_catalog_id": 4}  # Trimestre 1
+            {"cct": "15EPR0597V", "school_type_id": 2, "name": "Amado Nervo", "postal_code": "54070", "latitude": 19.529961, "longitude": -99.187095, "shift_id": 1},
+            {"cct": "15EPR0596W", "school_type_id": 2, "name": "JAIME NUNO", "postal_code": "54026", "latitude": 19.559397, "longitude": -99.214712, "shift_id": 1},
+            {"cct": "15DPR0906K", "school_type_id": 2, "name": "20 DE NOVIEMBRE", "postal_code": "54140", "latitude": 19.543918, "longitude": -99.154875, "shift_id": 1}
         ]
         for school_data in schools:
             existing = db.query(School).filter(
@@ -152,34 +152,8 @@ def seed_catalog_data():
 
         schools_list = db.query(School).all()
         print(f"\n  Escuelas: {len(schools_list)}")
-        
-        # Actualizar escuelas existentes que no tienen period_catalog_id
-        schools_updated = False
-        default_period = db.query(PeriodCatalog).filter(
-            PeriodCatalog.type_name == "Trimestre",
-            PeriodCatalog.period_number == 1
-        ).first()
-        
         for school in schools_list:
-            # Actualizar escuelas existentes que no tienen period_catalog_id
-            if school.period_catalog_id is None and default_period:
-                school.period_catalog_id = default_period.id
-                db.add(school)
-                schools_updated = True
-            
-            # Mostrar información del periodo
-            period_info = ""
-            if school.period_catalog_id:
-                period = db.query(PeriodCatalog).filter(PeriodCatalog.id == school.period_catalog_id).first()
-                if period:
-                    period_info = f" (Periodo: {period.type_name} {period.period_number})"
-            
-            print(f"    - ID: {school.id}, CCT: {school.cct}, Nombre: {school.name}{period_info}")
-        
-        # Commit de actualizaciones de period_catalog_id
-        if schools_updated:
-            db.commit()
-            print("\n  ✓ Escuelas actualizadas con period_catalog_id")
+            print(f"    - ID: {school.id}, CCT: {school.cct}, Nombre: {school.name}")
         
         # Crear usuario administrador por defecto (siempre verificar)
         print("\n👤 Verificando usuario administrador...")

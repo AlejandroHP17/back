@@ -16,7 +16,6 @@ class SchoolBase(BaseModel):
     latitude: Optional[Decimal] = Field(None, description="Latitud")
     longitude: Optional[Decimal] = Field(None, description="Longitud")
     shift_id: Optional[int] = Field(None, description="ID del turno")
-    period_catalog_id: Optional[int] = Field(None, description="ID del catálogo de periodo")
 
 
 class SchoolCreate(SchoolBase):
@@ -33,7 +32,6 @@ class SchoolUpdate(BaseModel):
     latitude: Optional[Decimal] = None
     longitude: Optional[Decimal] = None
     shift_id: Optional[int] = None
-    period_catalog_id: Optional[int] = None
 
 
 class SchoolResponse(SchoolBase):

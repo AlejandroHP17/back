@@ -13,9 +13,10 @@ class SchoolCycleBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=150, description="Nombre del ciclo")
     description: Optional[str] = Field(None, description="Descripción del ciclo")
     year: int = Field(..., ge=2000, le=3000, description="Año del ciclo")
-    turn_id: Optional[int] = Field(None, description="ID del turno")
+    cycle_label: Optional[str] = Field(None, max_length=50, description="Etiqueta del ciclo (ej: '2024-2025')")
     grade: Optional[str] = Field(None, max_length=20, description="Grado")
     group_name: Optional[str] = Field(None, max_length=20, description="Grupo")
+    period_catalog_id: Optional[int] = Field(None, description="ID del catálogo de periodo")
     is_active: bool = Field(True, description="Estado activo/inactivo")
 
 
@@ -31,9 +32,10 @@ class SchoolCycleUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=150)
     description: Optional[str] = None
     year: Optional[int] = Field(None, ge=2000, le=3000)
-    turn_id: Optional[int] = None
+    cycle_label: Optional[str] = Field(None, max_length=50)
     grade: Optional[str] = Field(None, max_length=20)
     group_name: Optional[str] = Field(None, max_length=20)
+    period_catalog_id: Optional[int] = None
     is_active: Optional[bool] = None
 
 
@@ -41,7 +43,6 @@ class SchoolCycleResponse(SchoolCycleBase):
     """Schema de respuesta para ciclo escolar."""
     id: int
     created_at: datetime
-    updated_at: datetime
     
     model_config = ConfigDict(from_attributes=True)
 

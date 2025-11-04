@@ -70,11 +70,9 @@ CREATE TABLE schools (
     latitude DECIMAL(10,6),
     longitude DECIMAL(10,6),
     shift_id TINYINT UNSIGNED,
-    period_catalog_id TINYINT UNSIGNED,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_schools_school_type FOREIGN KEY (school_type_id) REFERENCES school_types(id),
-    CONSTRAINT fk_schools_shift FOREIGN KEY (shift_id) REFERENCES shifts(id),
-    CONSTRAINT fk_schools_period_catalog FOREIGN KEY (period_catalog_id) REFERENCES period_catalog(id)
+    CONSTRAINT fk_schools_shift FOREIGN KEY (shift_id) REFERENCES shifts(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ======================================================
@@ -124,10 +122,12 @@ CREATE TABLE school_cycles (
     cycle_label VARCHAR(50),  -- ej "2024-2025"
     grade VARCHAR(20),
     group_name VARCHAR(20),
+    period_catalog_id TINYINT UNSIGNED,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_cycles_school FOREIGN KEY (school_id) REFERENCES schools(id),
-    CONSTRAINT fk_cycles_teacher FOREIGN KEY (teacher_id) REFERENCES users(id)
+    CONSTRAINT fk_cycles_teacher FOREIGN KEY (teacher_id) REFERENCES users(id),
+    CONSTRAINT fk_cycles_period_catalog FOREIGN KEY (period_catalog_id) REFERENCES period_catalog(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE INDEX idx_cycles_school_teacher ON school_cycles(school_id, teacher_id);
