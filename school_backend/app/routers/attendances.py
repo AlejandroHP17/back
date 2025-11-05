@@ -4,7 +4,7 @@ Router para gestión de asistencias.
 from typing import Annotated, List
 from fastapi import APIRouter, Depends, status, Query, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import and_
+from sqlalchemy import and_, or_
 from datetime import date
 from app.database import get_db
 from app.models.attendance import Attendance
@@ -15,15 +15,170 @@ from app.models.user import User
 from app.schemas.attendance import (
     AttendanceCreate,
     AttendanceUpdate,
-    AttendanceResponse
+    AttendanceResponse,
+    AttendanceBulkCreate,
+    AttendanceBulkResponse
 )
 from app.dependencies import get_current_active_user
 from app.exceptions import NotFoundError, ConflictError
 
 router = APIRouter(
     prefix="/attendances",
-    tags=["asistencias"]
+    tags=["attendances"]
 )
+
+
+@router.post("/bulk", response_model=AttendanceBulkResponse, status_code=status.HTTP_201_CREATED)
+async def create_attendances_bulk(
+    bulk_data: AttendanceBulkCreate,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_active_user)]
+):
+    """
+    Crea registros de asistencia para una lista de estudiantes presentes.
+    Los estudiantes que no estén en la lista se marcarán automáticamente como ausentes (absent).
+    Usa el ciclo escolar activo y el parcial activo del profesor si no se especifican.
+    """
+    today = bulk_data.attendance_date
+    
+    # Determinar el ciclo escolar a usar
+    if bulk_data.school_cycle_id:
+        school_cycle = db.query(SchoolCycle).filter(
+            SchoolCycle.id == bulk_data.school_cycle_id,
+            SchoolCycle.teacher_id == current_user.id
+        ).first()
+        if not school_cycle:
+            raise NotFoundError("Ciclo escolar", str(bulk_data.school_cycle_id))
+    else:
+        # Buscar el ciclo escolar activo del profesor
+        school_cycle = db.query(SchoolCycle).filter(
+            SchoolCycle.teacher_id == current_user.id,
+            SchoolCycle.is_active == True
+        ).order_by(SchoolCycle.created_at.desc()).first()
+        
+        if not school_cycle:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No se encontró un ciclo escolar activo para este profesor. Por favor, especifica un school_cycle_id o activa un ciclo escolar."
+            )
+    
+    # Determinar el parcial a usar
+    if bulk_data.partial_id:
+        partial = db.query(Partial).filter(
+            Partial.id == bulk_data.partial_id,
+            Partial.school_cycle_id == school_cycle.id
+        ).first()
+        if not partial:
+            raise NotFoundError("Parcial", str(bulk_data.partial_id))
+    else:
+        # Buscar el parcial activo (el que contiene la fecha actual o el más reciente)
+        partial = db.query(Partial).filter(
+            Partial.school_cycle_id == school_cycle.id
+        ).filter(
+            or_(
+                and_(Partial.start_date <= today, Partial.end_date >= today),  # Fecha dentro del rango
+                Partial.start_date.is_(None),  # Parcial sin fecha de inicio
+                Partial.end_date.is_(None)  # Parcial sin fecha de fin
+            )
+        ).order_by(Partial.start_date.desc()).first()
+        
+        # Si no hay parcial con fecha, tomar el más reciente
+        if not partial:
+            partial = db.query(Partial).filter(
+                Partial.school_cycle_id == school_cycle.id
+            ).order_by(Partial.created_at.desc()).first()
+        
+        if not partial:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No se encontró un parcial para este ciclo escolar. Por favor, especifica un partial_id o crea un parcial."
+            )
+    
+    # Obtener todos los estudiantes activos del ciclo escolar
+    all_students = db.query(Student).filter(
+        Student.school_cycle_id == school_cycle.id,
+        Student.is_active == True
+    ).all()
+    
+    if not all_students:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No se encontraron estudiantes activos en este ciclo escolar."
+        )
+    
+    # Convertir la lista de IDs presentes a un set para búsqueda rápida
+    present_student_ids = set(bulk_data.student_ids)
+    
+    # Validar que todos los IDs de estudiantes presentes existen y pertenecen al ciclo
+    for student_id in present_student_ids:
+        student = db.query(Student).filter(
+            Student.id == student_id,
+            Student.school_cycle_id == school_cycle.id
+        ).first()
+        if not student:
+            raise NotFoundError("Estudiante", str(student_id))
+    
+    created_attendances = []
+    updated_attendances = []
+    
+    # Procesar todos los estudiantes del ciclo
+    for student in all_students:
+        # Determinar el estado según si está en la lista de presentes
+        status = 'present' if student.id in present_student_ids else 'absent'
+        
+        # Verificar si ya existe una asistencia para este estudiante en esta fecha
+        existing_attendance = db.query(Attendance).filter(
+            and_(
+                Attendance.student_id == student.id,
+                Attendance.attendance_date == today,
+                Attendance.school_cycle_id == school_cycle.id
+            )
+        ).first()
+        
+        if existing_attendance:
+            # Actualizar la asistencia existente
+            existing_attendance.status = status
+            existing_attendance.partial_id = partial.id
+            updated_attendances.append(existing_attendance)
+        else:
+            # Crear nueva asistencia
+            new_attendance = Attendance(
+                student_id=student.id,
+                partial_id=partial.id,
+                school_cycle_id=school_cycle.id,
+                attendance_date=today,
+                status=status
+            )
+            db.add(new_attendance)
+            created_attendances.append(new_attendance)
+    
+    try:
+        db.commit()
+        
+        # Refrescar los objetos para obtener los IDs generados
+        for attendance in created_attendances:
+            db.refresh(attendance)
+        for attendance in updated_attendances:
+            db.refresh(attendance)
+        
+        total_present = len(present_student_ids)
+        total_absent = len(all_students) - total_present
+        
+        return AttendanceBulkResponse(
+            created=[AttendanceResponse.model_validate(att) for att in created_attendances],
+            updated=[AttendanceResponse.model_validate(att) for att in updated_attendances],
+            total_present=total_present,
+            total_absent=total_absent,
+            school_cycle_id=school_cycle.id,
+            partial_id=partial.id,
+            attendance_date=today
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al crear asistencias: {str(e)}"
+        )
 
 
 @router.post("/", response_model=AttendanceResponse, status_code=status.HTTP_201_CREATED)

@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from app.config import settings
-from app.routers import auth, schools, students, cycles, control, partials, formative_fields, work_type_evaluations, attendances
+from app.routers import auth, schools, students, cycles, control, partials, formative_fields, work_types, work_type_evaluations, attendances, student_works
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -40,14 +40,21 @@ app.include_router(students.router, prefix="/api")
 app.include_router(cycles.router, prefix="/api")
 app.include_router(partials.router, prefix="/api")
 app.include_router(formative_fields.router, prefix="/api")
+app.include_router(work_types.router, prefix="/api")
 app.include_router(work_type_evaluations.router, prefix="/api")
 app.include_router(attendances.router, prefix="/api")
+app.include_router(student_works.router, prefix="/api")
 app.include_router(control.router, prefix="/api")
 
 
-@app.get("/", tags=["inicio"])
+@app.get("/", tags=["root"])
 async def root():
-    """Endpoint raíz de la API."""
+    """
+    Endpoint raíz de la API.
+    
+    Returns:
+        dict: Información básica de la API incluyendo versión y URLs de documentación.
+    """
     return {
         "message": "Bienvenido al Sistema Escolar Backend",
         "version": settings.APP_VERSION,
@@ -56,9 +63,14 @@ async def root():
     }
 
 
-@app.get("/health", tags=["salud"])
+@app.get("/health", tags=["health"])
 async def health_check():
-    """Endpoint de salud para verificar el estado de la API."""
+    """
+    Endpoint de salud para verificar el estado de la API.
+    
+    Returns:
+        dict: Estado de la API y versión.
+    """
     return {"status": "healthy", "version": settings.APP_VERSION}
 
 

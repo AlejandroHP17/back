@@ -6,10 +6,10 @@ from fastapi import APIRouter, Depends, status, Query, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from app.database import get_db
-from app.models.learning_field import FormativeField
+from app.models.formative_field import FormativeField
 from app.models.cycle import SchoolCycle
 from app.models.user import User
-from app.schemas.learning_field import (
+from app.schemas.formative_field import (
     FormativeFieldCreate,
     FormativeFieldUpdate,
     FormativeFieldResponse
@@ -19,7 +19,7 @@ from app.exceptions import NotFoundError, ConflictError
 
 router = APIRouter(
     prefix="/formative-fields",
-    tags=["campos formativos"]
+    tags=["formative-fields"]
 )
 
 

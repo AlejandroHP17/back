@@ -44,7 +44,7 @@ from app.schemas.partial import (
     PartialUpdate,
     PartialResponse
 )
-from app.schemas.learning_field import (
+from app.schemas.formative_field import (
     FormativeFieldCreate,
     FormativeFieldUpdate,
     FormativeFieldResponse

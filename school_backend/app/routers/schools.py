@@ -14,7 +14,7 @@ from app.exceptions import NotFoundError, ConflictError
 
 router = APIRouter(
     prefix="/schools",
-    tags=["escuelas"]
+    tags=["schools"]
 )
 
 

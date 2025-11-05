@@ -8,8 +8,9 @@ from sqlalchemy import and_
 from app.database import get_db
 from app.models.work_type_evaluation import WorkTypeEvaluation
 from app.models.cycle import SchoolCycle
-from app.models.learning_field import FormativeField
+from app.models.formative_field import FormativeField
 from app.models.partial import Partial
+from app.models.work_type import WorkType
 from app.models.user import User
 from app.schemas.work_type_evaluation import (
     WorkTypeEvaluationCreate,
@@ -21,7 +22,7 @@ from app.exceptions import NotFoundError, ConflictError
 
 router = APIRouter(
     prefix="/work-type-evaluations",
-    tags=["pesos de evaluación"]
+    tags=["work-type-evaluations"]
 )
 
 
@@ -50,6 +51,14 @@ async def create_work_type_evaluation(
     
     if not partial:
         raise NotFoundError("Parcial", str(eval_data.partial_id))
+    
+    # Verificar que el tipo de trabajo existe
+    work_type = db.query(WorkType).filter(
+        WorkType.id == eval_data.work_type_id
+    ).first()
+    
+    if not work_type:
+        raise NotFoundError("Tipo de trabajo", str(eval_data.work_type_id))
     
     # Verificar que el campo formativo y el parcial pertenecen al mismo ciclo escolar
     if formative_field.school_cycle_id != partial.school_cycle_id:

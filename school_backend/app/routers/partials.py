@@ -15,7 +15,7 @@ from app.exceptions import NotFoundError, ConflictError
 
 router = APIRouter(
     prefix="/partials",
-    tags=["parciales"]
+    tags=["partials"]
 )
 
 

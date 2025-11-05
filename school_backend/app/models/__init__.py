@@ -14,7 +14,7 @@ from app.models.user import User, AccessCode
 from app.models.cycle import SchoolCycle
 from app.models.student import Student
 from app.models.partial import Partial
-from app.models.learning_field import FormativeField
+from app.models.formative_field import FormativeField
 from app.models.work_type import WorkType
 from app.models.work_type_evaluation import WorkTypeEvaluation
 from app.models.attendance import Attendance

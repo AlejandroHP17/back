@@ -14,7 +14,7 @@ from app.exceptions import NotFoundError
 
 router = APIRouter(
     prefix="/cycles",
-    tags=["ciclos escolares"]
+    tags=["school-cycles"]
 )
 
 

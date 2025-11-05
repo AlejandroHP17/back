@@ -15,7 +15,7 @@ from app.exceptions import UnauthorizedError, ConflictError
 
 router = APIRouter(
     prefix="/auth",
-    tags=["autenticación"]
+    tags=["authentication"]
 )
 
 

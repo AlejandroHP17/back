@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/control",
-    tags=["administración"]
+    tags=["administration"]
 )
 
 

@@ -8,7 +8,6 @@ from typing import Optional
 
 class WorkTypeBase(BaseModel):
     """Schema base para tipo de trabajo."""
-    teacher_id: int = Field(..., description="ID del profesor")
     name: str = Field(..., min_length=1, max_length=120, description="Nombre del tipo de trabajo")
 
 
@@ -26,6 +25,7 @@ class WorkTypeUpdate(BaseModel):
 class WorkTypeResponse(WorkTypeBase):
     """Schema de respuesta para tipo de trabajo."""
     id: int
+    teacher_id: int
     created_at: datetime
     
     model_config = ConfigDict(from_attributes=True)
