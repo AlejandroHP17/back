@@ -12,6 +12,7 @@ USE re_db;
 -- Elimina tablas en orden que evita violación FK
 DROP TABLE IF EXISTS student_works;
 DROP TABLE IF EXISTS attendances;
+DROP TABLE IF EXISTS work_type_evaluations;
 DROP TABLE IF EXISTS work_types;
 DROP TABLE IF EXISTS formative_fields;
 DROP TABLE IF EXISTS partials;
@@ -189,13 +190,31 @@ CREATE TABLE work_types (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     teacher_id BIGINT UNSIGNED NOT NULL,  -- creador/propietario del tipo
     name VARCHAR(120) NOT NULL,
-    evaluation_weight DECIMAL(5,2) NOT NULL DEFAULT 0.00, -- porcentaje (ej 20.00)
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uq_worktypes_teacher_name UNIQUE (teacher_id, name),
     CONSTRAINT fk_worktypes_teacher FOREIGN KEY (teacher_id) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE INDEX idx_worktypes_teacher ON work_types(teacher_id);
+
+-- ======================================================
+-- Pesos de evaluación por tipo de trabajo, campo formativo y parcial
+-- ======================================================
+CREATE TABLE work_type_evaluations (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    formative_field_id BIGINT UNSIGNED NOT NULL,
+    partial_id BIGINT UNSIGNED NOT NULL,
+    work_type_id BIGINT UNSIGNED NOT NULL,
+    evaluation_weight DECIMAL(5,2) NOT NULL DEFAULT 0.00, -- porcentaje (ej 20.00)
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_work_eval_unique UNIQUE (formative_field_id, partial_id, work_type_id),
+    CONSTRAINT fk_eval_field FOREIGN KEY (formative_field_id) REFERENCES formative_fields(id),
+    CONSTRAINT fk_eval_partial FOREIGN KEY (partial_id) REFERENCES partials(id),
+    CONSTRAINT fk_eval_worktype FOREIGN KEY (work_type_id) REFERENCES work_types(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE INDEX idx_eval_field_partial ON work_type_evaluations(formative_field_id, partial_id);
+CREATE INDEX idx_eval_worktype ON work_type_evaluations(work_type_id);
 
 -- ======================================================
 -- Trabajos / Calificaciones (per alumno, por parcial, por campo formativo)
@@ -228,11 +247,14 @@ CREATE TABLE attendances (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     student_id BIGINT UNSIGNED NOT NULL,
     partial_id BIGINT UNSIGNED NOT NULL,
+    school_cycle_id BIGINT UNSIGNED NOT NULL,
     attendance_date DATE NOT NULL,
     status ENUM('present','absent','late') NOT NULL DEFAULT 'present',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_attendance_student FOREIGN KEY (student_id) REFERENCES students(id),
-    CONSTRAINT fk_attendance_partial FOREIGN KEY (partial_id) REFERENCES partials(id)
+    CONSTRAINT fk_attendance_partial FOREIGN KEY (partial_id) REFERENCES partials(id),
+    CONSTRAINT fk_attendance_cycle FOREIGN KEY (school_cycle_id) REFERENCES school_cycles(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE INDEX idx_attendance_student_date ON attendances(student_id, attendance_date);
+CREATE INDEX idx_attendance_cycle ON attendances(school_cycle_id);

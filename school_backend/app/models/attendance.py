@@ -1,7 +1,7 @@
 """
 Modelo para asistencias.
 """
-from sqlalchemy import Column, BigInteger, Boolean, String, Date, DateTime, ForeignKey, Index, UniqueConstraint
+from sqlalchemy import Column, BigInteger, String, Date, DateTime, ForeignKey, Index, Enum
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.models.base import Base
@@ -14,13 +14,15 @@ class Attendance(Base):
     id = Column(BigInteger, primary_key=True, index=True)
     student_id = Column(BigInteger, ForeignKey("students.id"), nullable=False, index=True)
     partial_id = Column(BigInteger, ForeignKey("partials.id"), nullable=False, index=True)
+    school_cycle_id = Column(BigInteger, ForeignKey("school_cycles.id"), nullable=False, index=True)
     attendance_date = Column(Date, nullable=False)
-    status = Column(String(20), nullable=False, default='present')  # present, absent, late
+    status = Column(Enum('present', 'absent', 'late', name='attendance_status'), nullable=False, default='present')
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     
     # Relaciones
     student = relationship("Student", back_populates="attendances")
     partial = relationship("Partial", back_populates="attendances")
+    school_cycle = relationship("SchoolCycle", back_populates="attendances")
     
     def __repr__(self):
         return f"<Attendance(id={self.id}, student_id={self.student_id}, partial_id={self.partial_id}, attendance_date={self.attendance_date}, status={self.status})>"

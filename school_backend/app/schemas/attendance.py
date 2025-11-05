@@ -3,19 +3,16 @@ Schemas para asistencias.
 """
 from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime, date
-from typing import Optional
+from typing import Optional, Literal
 
 
 class AttendanceBase(BaseModel):
     """Schema base para asistencia."""
     student_id: int = Field(..., description="ID del estudiante")
     partial_id: int = Field(..., description="ID del parcial")
-    attended: bool = Field(default=True, description="Estado de asistencia")
-    attendance_date: date = Field(..., alias="date", description="Fecha de asistencia")
-    notes: Optional[str] = Field(default=None, max_length=255, description="Notas adicionales")
-    
-    class Config:
-        populate_by_name = True
+    school_cycle_id: int = Field(..., description="ID del ciclo escolar")
+    attendance_date: date = Field(..., description="Fecha de asistencia")
+    status: Literal['present', 'absent', 'late'] = Field(default='present', description="Estado de asistencia: present, absent, late")
 
 
 class AttendanceCreate(AttendanceBase):
@@ -27,22 +24,14 @@ class AttendanceUpdate(BaseModel):
     """Schema para actualizar una asistencia."""
     student_id: Optional[int] = None
     partial_id: Optional[int] = None
-    attended: Optional[bool] = None
-    attendance_date: Optional[date] = Field(None, alias="date")
-    notes: Optional[str] = Field(default=None, max_length=255)
-    
-    class Config:
-        populate_by_name = True
+    school_cycle_id: Optional[int] = None
+    attendance_date: Optional[date] = None
+    status: Optional[Literal['present', 'absent', 'late']] = None
 
 
-class AttendanceResponse(BaseModel):
+class AttendanceResponse(AttendanceBase):
     """Schema de respuesta para asistencia."""
     id: int
-    student_id: int
-    partial_id: int
-    attended: bool
-    date: date
-    notes: Optional[str] = None
     created_at: datetime
     
     model_config = ConfigDict(from_attributes=True)

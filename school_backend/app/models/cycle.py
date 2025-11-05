@@ -31,6 +31,7 @@ class SchoolCycle(Base):
     students = relationship("Student", back_populates="school_cycle", cascade="all, delete-orphan")
     partials = relationship("Partial", back_populates="school_cycle", cascade="all, delete-orphan")
     formative_fields = relationship("FormativeField", back_populates="school_cycle", cascade="all, delete-orphan")
+    attendances = relationship("Attendance", back_populates="school_cycle", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<SchoolCycle(id={self.id}, name='{self.name}', year={self.year})>"

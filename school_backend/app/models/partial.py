@@ -22,6 +22,7 @@ class Partial(Base):
     school_cycle = relationship("SchoolCycle", back_populates="partials")
     attendances = relationship("Attendance", back_populates="partial", cascade="all, delete-orphan")
     student_works = relationship("StudentWork", back_populates="partial")
+    work_type_evaluations = relationship("WorkTypeEvaluation", back_populates="partial")
     
     def __repr__(self):
         return f"<Partial(id={self.id}, school_cycle_id={self.school_cycle_id}, name='{self.name}')>"

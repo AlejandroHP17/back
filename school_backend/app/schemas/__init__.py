@@ -54,6 +54,11 @@ from app.schemas.work_type import (
     WorkTypeUpdate,
     WorkTypeResponse
 )
+from app.schemas.work_type_evaluation import (
+    WorkTypeEvaluationCreate,
+    WorkTypeEvaluationUpdate,
+    WorkTypeEvaluationResponse
+)
 from app.schemas.attendance import (
     AttendanceCreate,
     AttendanceUpdate,
@@ -102,6 +107,9 @@ __all__ = [
     "WorkTypeCreate",
     "WorkTypeUpdate",
     "WorkTypeResponse",
+    "WorkTypeEvaluationCreate",
+    "WorkTypeEvaluationUpdate",
+    "WorkTypeEvaluationResponse",
     "AttendanceCreate",
     "AttendanceUpdate",
     "AttendanceResponse",

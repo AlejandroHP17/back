@@ -20,6 +20,7 @@ class FormativeField(Base):
     # Relaciones
     school_cycle = relationship("SchoolCycle", back_populates="formative_fields")
     student_works = relationship("StudentWork", back_populates="formative_field")
+    work_type_evaluations = relationship("WorkTypeEvaluation", back_populates="formative_field")
     
     def __repr__(self):
         return f"<FormativeField(id={self.id}, school_cycle_id={self.school_cycle_id}, name='{self.name}')>"
