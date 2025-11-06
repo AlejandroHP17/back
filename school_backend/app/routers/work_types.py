@@ -13,6 +13,7 @@ from app.schemas.work_type import (
     WorkTypeUpdate,
     WorkTypeResponse
 )
+from app.schemas.response import GenericResponse, success_response, created_response
 from app.dependencies import get_current_active_user
 from app.exceptions import NotFoundError, ConflictError
 import logging
@@ -25,7 +26,7 @@ router = APIRouter(
 )
 
 
-@router.post("/", response_model=WorkTypeResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=GenericResponse[WorkTypeResponse], status_code=status.HTTP_201_CREATED)
 async def create_work_type(
     work_type_data: WorkTypeCreate,
     db: Annotated[Session, Depends(get_db)],
@@ -59,7 +60,8 @@ async def create_work_type(
         db.add(new_work_type)
         db.commit()
         db.refresh(new_work_type)
-        return WorkTypeResponse.model_validate(new_work_type)
+        work_type_response = WorkTypeResponse.model_validate(new_work_type)
+        return created_response(data=work_type_response)
     except IntegrityError as e:
         db.rollback()
         error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
@@ -86,7 +88,7 @@ async def create_work_type(
         )
 
 
-@router.get("/", response_model=List[WorkTypeResponse])
+@router.get("/", response_model=GenericResponse[List[WorkTypeResponse]])
 async def list_work_types(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_active_user)],
@@ -109,10 +111,11 @@ async def list_work_types(
         query = query.filter(WorkType.teacher_id == current_user.id)
     
     work_types = query.offset(skip).limit(limit).all()
-    return [WorkTypeResponse.model_validate(wt) for wt in work_types]
+    work_types_list = [WorkTypeResponse.model_validate(wt) for wt in work_types]
+    return success_response(data=work_types_list)
 
 
-@router.get("/{work_type_id}", response_model=WorkTypeResponse)
+@router.get("/{work_type_id}", response_model=GenericResponse[WorkTypeResponse])
 async def get_work_type(
     work_type_id: int,
     db: Annotated[Session, Depends(get_db)],
@@ -126,10 +129,11 @@ async def get_work_type(
     if not work_type:
         raise NotFoundError("Tipo de trabajo", str(work_type_id))
     
-    return WorkTypeResponse.model_validate(work_type)
+    work_type_response = WorkTypeResponse.model_validate(work_type)
+    return success_response(data=work_type_response)
 
 
-@router.put("/{work_type_id}", response_model=WorkTypeResponse)
+@router.put("/{work_type_id}", response_model=GenericResponse[WorkTypeResponse])
 async def update_work_type(
     work_type_id: int,
     work_type_data: WorkTypeUpdate,
@@ -171,7 +175,8 @@ async def update_work_type(
         
         db.commit()
         db.refresh(work_type)
-        return WorkTypeResponse.model_validate(work_type)
+        work_type_response = WorkTypeResponse.model_validate(work_type)
+        return success_response(data=work_type_response)
     except IntegrityError as e:
         db.rollback()
         error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
@@ -198,7 +203,7 @@ async def update_work_type(
         )
 
 
-@router.delete("/{work_type_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{work_type_id}", response_model=GenericResponse[None])
 async def delete_work_type(
     work_type_id: int,
     db: Annotated[Session, Depends(get_db)],
@@ -223,7 +228,7 @@ async def delete_work_type(
     try:
         db.delete(work_type)
         db.commit()
-        return None
+        return success_response(data=None)
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error de base de datos al eliminar tipo de trabajo: {str(e)}")

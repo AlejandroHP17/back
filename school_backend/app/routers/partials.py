@@ -10,6 +10,7 @@ from app.models.partial import Partial
 from app.models.cycle import SchoolCycle
 from app.models.user import User
 from app.schemas.partial import PartialCreate, PartialCreateList, PartialUpdate, PartialResponse
+from app.schemas.response import GenericResponse, success_response, created_response
 from app.dependencies import get_current_active_user
 from app.exceptions import NotFoundError, ConflictError
 
@@ -19,7 +20,7 @@ router = APIRouter(
 )
 
 
-@router.post("/", response_model=List[PartialResponse], status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=GenericResponse[List[PartialResponse]], status_code=status.HTTP_201_CREATED)
 async def create_partials(
     partials_data: PartialCreateList,
     db: Annotated[Session, Depends(get_db)],
@@ -72,10 +73,11 @@ async def create_partials(
     for partial in created_partials:
         db.refresh(partial)
     
-    return [PartialResponse.model_validate(partial) for partial in created_partials]
+    partials_list = [PartialResponse.model_validate(partial) for partial in created_partials]
+    return created_response(data=partials_list)
 
 
-@router.get("/", response_model=List[PartialResponse])
+@router.get("/", response_model=GenericResponse[List[PartialResponse]])
 async def list_partials(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_active_user)],
@@ -99,10 +101,11 @@ async def list_partials(
         query = query.filter(Partial.school_cycle_id == school_cycle_id)
     
     partials = query.offset(skip).limit(limit).all()
-    return [PartialResponse.model_validate(partial) for partial in partials]
+    partials_list = [PartialResponse.model_validate(partial) for partial in partials]
+    return success_response(data=partials_list)
 
 
-@router.get("/{partial_id}", response_model=PartialResponse)
+@router.get("/{partial_id}", response_model=GenericResponse[PartialResponse])
 async def get_partial(
     partial_id: int,
     db: Annotated[Session, Depends(get_db)],
@@ -116,10 +119,11 @@ async def get_partial(
     if not partial:
         raise NotFoundError("Parcial", str(partial_id))
     
-    return PartialResponse.model_validate(partial)
+    partial_response = PartialResponse.model_validate(partial)
+    return success_response(data=partial_response)
 
 
-@router.put("/{partial_id}", response_model=PartialResponse)
+@router.put("/{partial_id}", response_model=GenericResponse[PartialResponse])
 async def update_partial(
     partial_id: int,
     partial_data: PartialUpdate,
@@ -170,10 +174,11 @@ async def update_partial(
     db.commit()
     db.refresh(partial)
     
-    return PartialResponse.model_validate(partial)
+    partial_response = PartialResponse.model_validate(partial)
+    return success_response(data=partial_response)
 
 
-@router.delete("/{partial_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{partial_id}", response_model=GenericResponse[None])
 async def delete_partial(
     partial_id: int,
     db: Annotated[Session, Depends(get_db)],
@@ -203,5 +208,5 @@ async def delete_partial(
     db.delete(partial)
     db.commit()
     
-    return None
+    return success_response(data=None)
 

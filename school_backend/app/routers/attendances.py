@@ -19,6 +19,7 @@ from app.schemas.attendance import (
     AttendanceBulkCreate,
     AttendanceBulkResponse
 )
+from app.schemas.response import GenericResponse, success_response, created_response
 from app.dependencies import get_current_active_user
 from app.exceptions import NotFoundError, ConflictError
 
@@ -28,7 +29,7 @@ router = APIRouter(
 )
 
 
-@router.post("/bulk", response_model=AttendanceBulkResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/bulk", response_model=GenericResponse[AttendanceBulkResponse], status_code=status.HTTP_201_CREATED)
 async def create_attendances_bulk(
     bulk_data: AttendanceBulkCreate,
     db: Annotated[Session, Depends(get_db)],
@@ -164,7 +165,7 @@ async def create_attendances_bulk(
         total_present = len(present_student_ids)
         total_absent = len(all_students) - total_present
         
-        return AttendanceBulkResponse(
+        bulk_response = AttendanceBulkResponse(
             created=[AttendanceResponse.model_validate(att) for att in created_attendances],
             updated=[AttendanceResponse.model_validate(att) for att in updated_attendances],
             total_present=total_present,
@@ -173,6 +174,7 @@ async def create_attendances_bulk(
             partial_id=partial.id,
             attendance_date=today
         )
+        return created_response(data=bulk_response)
     except Exception as e:
         db.rollback()
         raise HTTPException(
@@ -181,7 +183,7 @@ async def create_attendances_bulk(
         )
 
 
-@router.post("/", response_model=AttendanceResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=GenericResponse[AttendanceResponse], status_code=status.HTTP_201_CREATED)
 async def create_attendance(
     attendance_data: AttendanceCreate,
     db: Annotated[Session, Depends(get_db)],
@@ -254,10 +256,11 @@ async def create_attendance(
     db.commit()
     db.refresh(new_attendance)
     
-    return AttendanceResponse.model_validate(new_attendance)
+    attendance_response = AttendanceResponse.model_validate(new_attendance)
+    return created_response(data=attendance_response)
 
 
-@router.get("/", response_model=List[AttendanceResponse])
+@router.get("/", response_model=GenericResponse[List[AttendanceResponse]])
 async def list_attendances(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_active_user)],
@@ -301,10 +304,11 @@ async def list_attendances(
         query = query.filter(Attendance.status == status)
     
     attendances = query.offset(skip).limit(limit).all()
-    return [AttendanceResponse.model_validate(attendance) for attendance in attendances]
+    attendances_list = [AttendanceResponse.model_validate(attendance) for attendance in attendances]
+    return success_response(data=attendances_list)
 
 
-@router.get("/{attendance_id}", response_model=AttendanceResponse)
+@router.get("/{attendance_id}", response_model=GenericResponse[AttendanceResponse])
 async def get_attendance(
     attendance_id: int,
     db: Annotated[Session, Depends(get_db)],
@@ -318,10 +322,11 @@ async def get_attendance(
     if not attendance:
         raise NotFoundError("Asistencia", str(attendance_id))
     
-    return AttendanceResponse.model_validate(attendance)
+    attendance_response = AttendanceResponse.model_validate(attendance)
+    return success_response(data=attendance_response)
 
 
-@router.put("/{attendance_id}", response_model=AttendanceResponse)
+@router.put("/{attendance_id}", response_model=GenericResponse[AttendanceResponse])
 async def update_attendance(
     attendance_id: int,
     attendance_data: AttendanceUpdate,
@@ -438,10 +443,11 @@ async def update_attendance(
     db.commit()
     db.refresh(attendance)
     
-    return AttendanceResponse.model_validate(attendance)
+    attendance_response = AttendanceResponse.model_validate(attendance)
+    return success_response(data=attendance_response)
 
 
-@router.delete("/{attendance_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{attendance_id}", response_model=GenericResponse[None])
 async def delete_attendance(
     attendance_id: int,
     db: Annotated[Session, Depends(get_db)],
@@ -471,5 +477,5 @@ async def delete_attendance(
     db.delete(attendance)
     db.commit()
     
-    return None
+    return success_response(data=None)
 

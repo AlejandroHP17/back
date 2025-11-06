@@ -69,6 +69,13 @@ from app.schemas.student_work import (
     StudentWorkUpdate,
     StudentWorkResponse
 )
+from app.schemas.response import (
+    Response,
+    GenericResponse,
+    success_response,
+    created_response,
+    get_error_message
+)
 
 __all__ = [
     "SchoolTypeCreate",
@@ -116,5 +123,10 @@ __all__ = [
     "StudentWorkCreate",
     "StudentWorkUpdate",
     "StudentWorkResponse",
+    "Response",
+    "GenericResponse",
+    "success_response",
+    "created_response",
+    "get_error_message",
 ]
 

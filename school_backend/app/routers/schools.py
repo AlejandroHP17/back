@@ -9,6 +9,7 @@ from app.database import get_db
 from app.models.catalog import School
 from app.models.user import User
 from app.schemas.school import SchoolCreate, SchoolUpdate, SchoolResponse
+from app.schemas.response import GenericResponse, success_response, created_response
 from app.dependencies import get_current_active_user, require_access_level
 from app.exceptions import NotFoundError, ConflictError
 
@@ -18,7 +19,7 @@ router = APIRouter(
 )
 
 
-@router.post("/", response_model=SchoolResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=GenericResponse[SchoolResponse], status_code=status.HTTP_201_CREATED)
 async def create_school(
     school_data: SchoolCreate,
     db: Annotated[Session, Depends(get_db)],
@@ -38,10 +39,11 @@ async def create_school(
     db.commit()
     db.refresh(new_school)
     
-    return SchoolResponse.model_validate(new_school)
+    school_response = SchoolResponse.model_validate(new_school)
+    return created_response(data=school_response)
 
 
-@router.get("/", response_model=List[SchoolResponse])
+@router.get("/", response_model=GenericResponse[List[SchoolResponse]])
 async def list_schools(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_active_user)],
@@ -64,10 +66,11 @@ async def list_schools(
         )
     
     schools = query.offset(skip).limit(limit).all()
-    return [SchoolResponse.model_validate(school) for school in schools]
+    schools_list = [SchoolResponse.model_validate(school) for school in schools]
+    return success_response(data=schools_list)
 
 
-@router.get("/{cct}", response_model=SchoolResponse)
+@router.get("/{cct}", response_model=GenericResponse[SchoolResponse])
 async def get_school(
     cct: str,
     db: Annotated[Session, Depends(get_db)],
@@ -80,10 +83,11 @@ async def get_school(
     if not school:
         raise NotFoundError("Escuela", cct)
     
-    return SchoolResponse.model_validate(school)
+    school_response = SchoolResponse.model_validate(school)
+    return success_response(data=school_response)
 
 
-@router.put("/{cct}", response_model=SchoolResponse)
+@router.put("/{cct}", response_model=GenericResponse[SchoolResponse])
 async def update_school(
     cct: str,
     school_data: SchoolUpdate,
@@ -111,10 +115,11 @@ async def update_school(
     db.commit()
     db.refresh(school)
     
-    return SchoolResponse.model_validate(school)
+    school_response = SchoolResponse.model_validate(school)
+    return success_response(data=school_response)
 
 
-@router.delete("/{cct}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{cct}", response_model=GenericResponse[None])
 async def delete_school(
     cct: str,
     db: Annotated[Session, Depends(get_db)],
@@ -131,5 +136,5 @@ async def delete_school(
     db.delete(school)
     db.commit()
     
-    return None
+    return success_response(data=None)
 

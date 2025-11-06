@@ -14,6 +14,7 @@ from app.schemas.formative_field import (
     FormativeFieldUpdate,
     FormativeFieldResponse
 )
+from app.schemas.response import GenericResponse, success_response, created_response
 from app.dependencies import get_current_active_user
 from app.exceptions import NotFoundError, ConflictError
 
@@ -23,7 +24,7 @@ router = APIRouter(
 )
 
 
-@router.post("/", response_model=FormativeFieldResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=GenericResponse[FormativeFieldResponse], status_code=status.HTTP_201_CREATED)
 async def create_formative_field(
     field_data: FormativeFieldCreate,
     db: Annotated[Session, Depends(get_db)],
@@ -59,10 +60,11 @@ async def create_formative_field(
     db.commit()
     db.refresh(new_field)
     
-    return FormativeFieldResponse.model_validate(new_field)
+    field_response = FormativeFieldResponse.model_validate(new_field)
+    return created_response(data=field_response)
 
 
-@router.get("/", response_model=List[FormativeFieldResponse])
+@router.get("/", response_model=GenericResponse[List[FormativeFieldResponse]])
 async def list_formative_fields(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_active_user)],
@@ -86,10 +88,11 @@ async def list_formative_fields(
         query = query.filter(FormativeField.school_cycle_id == school_cycle_id)
     
     fields = query.offset(skip).limit(limit).all()
-    return [FormativeFieldResponse.model_validate(field) for field in fields]
+    fields_list = [FormativeFieldResponse.model_validate(field) for field in fields]
+    return success_response(data=fields_list)
 
 
-@router.get("/{field_id}", response_model=FormativeFieldResponse)
+@router.get("/{field_id}", response_model=GenericResponse[FormativeFieldResponse])
 async def get_formative_field(
     field_id: int,
     db: Annotated[Session, Depends(get_db)],
@@ -103,10 +106,11 @@ async def get_formative_field(
     if not field:
         raise NotFoundError("Campo formativo", str(field_id))
     
-    return FormativeFieldResponse.model_validate(field)
+    field_response = FormativeFieldResponse.model_validate(field)
+    return success_response(data=field_response)
 
 
-@router.put("/{field_id}", response_model=FormativeFieldResponse)
+@router.put("/{field_id}", response_model=GenericResponse[FormativeFieldResponse])
 async def update_formative_field(
     field_id: int,
     field_data: FormativeFieldUpdate,
@@ -157,10 +161,11 @@ async def update_formative_field(
     db.commit()
     db.refresh(field)
     
-    return FormativeFieldResponse.model_validate(field)
+    field_response = FormativeFieldResponse.model_validate(field)
+    return success_response(data=field_response)
 
 
-@router.delete("/{field_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{field_id}", response_model=GenericResponse[None])
 async def delete_formative_field(
     field_id: int,
     db: Annotated[Session, Depends(get_db)],
@@ -190,5 +195,5 @@ async def delete_formative_field(
     db.delete(field)
     db.commit()
     
-    return None
+    return success_response(data=None)
 

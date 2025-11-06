@@ -9,6 +9,7 @@ from app.database import get_db
 from app.models.user import User, AccessCode
 from app.models.catalog import AccessLevel
 from app.schemas.user import AccessCodeCreate, AccessCodeUpdate, AccessCodeResponse
+from app.schemas.response import GenericResponse, success_response, created_response
 from app.dependencies import get_current_active_user, require_access_level
 from app.exceptions import NotFoundError, ConflictError
 import logging
@@ -21,7 +22,7 @@ router = APIRouter(
 )
 
 
-@router.post("/access-codes", response_model=AccessCodeResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/access-codes", response_model=GenericResponse[AccessCodeResponse], status_code=status.HTTP_201_CREATED)
 async def create_access_code(
     code_data: AccessCodeCreate,
     db: Annotated[Session, Depends(get_db)],
@@ -58,7 +59,8 @@ async def create_access_code(
         db.commit()
         db.refresh(new_code)
         
-        return AccessCodeResponse.model_validate(new_code)
+        code_response = AccessCodeResponse.model_validate(new_code)
+        return created_response(data=code_response)
     except IntegrityError as e:
         db.rollback()
         error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
@@ -98,7 +100,7 @@ async def create_access_code(
         )
 
 
-@router.put("/access-codes/{code_id}", response_model=AccessCodeResponse)
+@router.put("/access-codes/{code_id}", response_model=GenericResponse[AccessCodeResponse])
 async def update_access_code_status(
     code_id: int,
     code_update: AccessCodeUpdate,
@@ -119,10 +121,11 @@ async def update_access_code_status(
     db.commit()
     db.refresh(access_code)
     
-    return AccessCodeResponse.model_validate(access_code)
+    code_response = AccessCodeResponse.model_validate(access_code)
+    return success_response(data=code_response)
 
 
-@router.get("/access-codes", response_model=List[AccessCodeResponse])
+@router.get("/access-codes", response_model=GenericResponse[List[AccessCodeResponse]])
 async def list_access_codes(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(require_access_level("Administrador"))],
@@ -138,10 +141,11 @@ async def list_access_codes(
         query = query.filter(AccessCode.is_active == True)
     
     codes = query.order_by(AccessCode.created_at.desc()).all()
-    return [AccessCodeResponse.model_validate(code) for code in codes]
+    codes_list = [AccessCodeResponse.model_validate(code) for code in codes]
+    return success_response(data=codes_list)
 
 
-@router.get("/access-codes/{code_id}", response_model=AccessCodeResponse)
+@router.get("/access-codes/{code_id}", response_model=GenericResponse[AccessCodeResponse])
 async def get_access_code(
     code_id: int,
     db: Annotated[Session, Depends(get_db)],
@@ -155,4 +159,5 @@ async def get_access_code(
     if not access_code:
         raise NotFoundError("Código de acceso", str(code_id))
     
-    return AccessCodeResponse.model_validate(access_code)
+    code_response = AccessCodeResponse.model_validate(access_code)
+    return success_response(data=code_response)

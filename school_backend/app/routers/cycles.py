@@ -9,6 +9,7 @@ from app.database import get_db
 from app.models.cycle import SchoolCycle
 from app.models.user import User
 from app.schemas.cycle import SchoolCycleCreate, SchoolCycleUpdate, SchoolCycleResponse
+from app.schemas.response import GenericResponse, success_response, created_response
 from app.dependencies import get_current_active_user
 from app.exceptions import NotFoundError
 
@@ -18,7 +19,7 @@ router = APIRouter(
 )
 
 
-@router.post("/", response_model=SchoolCycleResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=GenericResponse[SchoolCycleResponse], status_code=status.HTTP_201_CREATED)
 async def create_cycle(
     cycle_data: SchoolCycleCreate,
     db: Annotated[Session, Depends(get_db)],
@@ -32,10 +33,11 @@ async def create_cycle(
     db.commit()
     db.refresh(new_cycle)
     
-    return SchoolCycleResponse.model_validate(new_cycle)
+    cycle_response = SchoolCycleResponse.model_validate(new_cycle)
+    return created_response(data=cycle_response)
 
 
-@router.get("/", response_model=List[SchoolCycleResponse])
+@router.get("/", response_model=GenericResponse[List[SchoolCycleResponse]])
 async def list_cycles(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_active_user)],
@@ -60,10 +62,11 @@ async def list_cycles(
         query = query.filter(SchoolCycle.is_active == is_active)
     
     cycles = query.offset(skip).limit(limit).all()
-    return [SchoolCycleResponse.model_validate(cycle) for cycle in cycles]
+    cycles_list = [SchoolCycleResponse.model_validate(cycle) for cycle in cycles]
+    return success_response(data=cycles_list)
 
 
-@router.get("/{cycle_id}", response_model=SchoolCycleResponse)
+@router.get("/{cycle_id}", response_model=GenericResponse[SchoolCycleResponse])
 async def get_cycle(
     cycle_id: int,
     db: Annotated[Session, Depends(get_db)],
@@ -76,10 +79,11 @@ async def get_cycle(
     if not cycle:
         raise NotFoundError("Ciclo escolar", str(cycle_id))
     
-    return SchoolCycleResponse.model_validate(cycle)
+    cycle_response = SchoolCycleResponse.model_validate(cycle)
+    return success_response(data=cycle_response)
 
 
-@router.put("/{cycle_id}", response_model=SchoolCycleResponse)
+@router.put("/{cycle_id}", response_model=GenericResponse[SchoolCycleResponse])
 async def update_cycle(
     cycle_id: int,
     cycle_data: SchoolCycleUpdate,
@@ -100,10 +104,11 @@ async def update_cycle(
     db.commit()
     db.refresh(cycle)
     
-    return SchoolCycleResponse.model_validate(cycle)
+    cycle_response = SchoolCycleResponse.model_validate(cycle)
+    return success_response(data=cycle_response)
 
 
-@router.delete("/{cycle_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{cycle_id}", response_model=GenericResponse[None])
 async def delete_cycle(
     cycle_id: int,
     db: Annotated[Session, Depends(get_db)],
@@ -119,5 +124,5 @@ async def delete_cycle(
     db.delete(cycle)
     db.commit()
     
-    return None
+    return success_response(data=None)
 

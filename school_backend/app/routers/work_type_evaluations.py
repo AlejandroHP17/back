@@ -17,6 +17,7 @@ from app.schemas.work_type_evaluation import (
     WorkTypeEvaluationUpdate,
     WorkTypeEvaluationResponse
 )
+from app.schemas.response import GenericResponse, success_response, created_response
 from app.dependencies import get_current_active_user
 from app.exceptions import NotFoundError, ConflictError
 
@@ -26,7 +27,7 @@ router = APIRouter(
 )
 
 
-@router.post("/", response_model=WorkTypeEvaluationResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=GenericResponse[WorkTypeEvaluationResponse], status_code=status.HTTP_201_CREATED)
 async def create_work_type_evaluation(
     eval_data: WorkTypeEvaluationCreate,
     db: Annotated[Session, Depends(get_db)],
@@ -103,10 +104,11 @@ async def create_work_type_evaluation(
     db.commit()
     db.refresh(new_eval)
     
-    return WorkTypeEvaluationResponse.model_validate(new_eval)
+    eval_response = WorkTypeEvaluationResponse.model_validate(new_eval)
+    return created_response(data=eval_response)
 
 
-@router.get("/", response_model=List[WorkTypeEvaluationResponse])
+@router.get("/", response_model=GenericResponse[List[WorkTypeEvaluationResponse]])
 async def list_work_type_evaluations(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_active_user)],
@@ -148,10 +150,11 @@ async def list_work_type_evaluations(
         query = query.filter(WorkTypeEvaluation.work_type_id == work_type_id)
     
     evaluations = query.offset(skip).limit(limit).all()
-    return [WorkTypeEvaluationResponse.model_validate(eval) for eval in evaluations]
+    evaluations_list = [WorkTypeEvaluationResponse.model_validate(eval) for eval in evaluations]
+    return success_response(data=evaluations_list)
 
 
-@router.get("/{evaluation_id}", response_model=WorkTypeEvaluationResponse)
+@router.get("/{evaluation_id}", response_model=GenericResponse[WorkTypeEvaluationResponse])
 async def get_work_type_evaluation(
     evaluation_id: int,
     db: Annotated[Session, Depends(get_db)],
@@ -167,10 +170,11 @@ async def get_work_type_evaluation(
     if not evaluation:
         raise NotFoundError("Peso de evaluación", str(evaluation_id))
     
-    return WorkTypeEvaluationResponse.model_validate(evaluation)
+    eval_response = WorkTypeEvaluationResponse.model_validate(evaluation)
+    return success_response(data=eval_response)
 
 
-@router.put("/{evaluation_id}", response_model=WorkTypeEvaluationResponse)
+@router.put("/{evaluation_id}", response_model=GenericResponse[WorkTypeEvaluationResponse])
 async def update_work_type_evaluation(
     evaluation_id: int,
     eval_data: WorkTypeEvaluationUpdate,
@@ -288,10 +292,11 @@ async def update_work_type_evaluation(
     db.commit()
     db.refresh(evaluation)
     
-    return WorkTypeEvaluationResponse.model_validate(evaluation)
+    eval_response = WorkTypeEvaluationResponse.model_validate(evaluation)
+    return success_response(data=eval_response)
 
 
-@router.delete("/{evaluation_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{evaluation_id}", response_model=GenericResponse[None])
 async def delete_work_type_evaluation(
     evaluation_id: int,
     db: Annotated[Session, Depends(get_db)],
@@ -328,5 +333,5 @@ async def delete_work_type_evaluation(
     db.delete(evaluation)
     db.commit()
     
-    return None
+    return success_response(data=None)
 

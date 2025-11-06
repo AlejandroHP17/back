@@ -21,6 +21,7 @@ from app.schemas.student_work import (
     StudentWorkBulkCreate,
     StudentWorkBulkResponse
 )
+from app.schemas.response import GenericResponse, success_response, created_response
 from app.dependencies import get_current_active_user
 from app.exceptions import NotFoundError, ConflictError
 import logging
@@ -33,7 +34,7 @@ router = APIRouter(
 )
 
 
-@router.post("/bulk", response_model=StudentWorkBulkResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/bulk", response_model=GenericResponse[StudentWorkBulkResponse], status_code=status.HTTP_201_CREATED)
 async def create_student_works_bulk(
     bulk_data: StudentWorkBulkCreate,
     db: Annotated[Session, Depends(get_db)],
@@ -168,7 +169,7 @@ async def create_student_works_bulk(
         total_with_grade = sum(1 for work in created_works + updated_works if work.grade is not None)
         total_without_grade = len(created_works + updated_works) - total_with_grade
         
-        return StudentWorkBulkResponse(
+        bulk_response = StudentWorkBulkResponse(
             created=[StudentWorkResponse.model_validate(work) for work in created_works],
             updated=[StudentWorkResponse.model_validate(work) for work in updated_works],
             total_with_grade=total_with_grade,
@@ -178,6 +179,7 @@ async def create_student_works_bulk(
             work_type_id=bulk_data.work_type_id,
             name=bulk_data.name
         )
+        return created_response(data=bulk_response)
     except Exception as e:
         db.rollback()
         logger.error(f"Error al crear trabajos en masa: {str(e)}")
@@ -187,7 +189,7 @@ async def create_student_works_bulk(
         )
 
 
-@router.post("/", response_model=StudentWorkResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=GenericResponse[StudentWorkResponse], status_code=status.HTTP_201_CREATED)
 async def create_student_work(
     work_data: StudentWorkCreate,
     db: Annotated[Session, Depends(get_db)],
@@ -259,10 +261,11 @@ async def create_student_work(
     db.commit()
     db.refresh(new_work)
     
-    return StudentWorkResponse.model_validate(new_work)
+    work_response = StudentWorkResponse.model_validate(new_work)
+    return created_response(data=work_response)
 
 
-@router.get("/", response_model=List[StudentWorkResponse])
+@router.get("/", response_model=GenericResponse[List[StudentWorkResponse]])
 async def list_student_works(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_active_user)],
@@ -305,10 +308,11 @@ async def list_student_works(
         query = query.filter(StudentWork.work_type_id == work_type_id)
     
     works = query.offset(skip).limit(limit).all()
-    return [StudentWorkResponse.model_validate(work) for work in works]
+    works_list = [StudentWorkResponse.model_validate(work) for work in works]
+    return success_response(data=works_list)
 
 
-@router.get("/{work_id}", response_model=StudentWorkResponse)
+@router.get("/{work_id}", response_model=GenericResponse[StudentWorkResponse])
 async def get_student_work(
     work_id: int,
     db: Annotated[Session, Depends(get_db)],
@@ -322,10 +326,11 @@ async def get_student_work(
     if not work:
         raise NotFoundError("Trabajo de estudiante", str(work_id))
     
-    return StudentWorkResponse.model_validate(work)
+    work_response = StudentWorkResponse.model_validate(work)
+    return success_response(data=work_response)
 
 
-@router.put("/{work_id}", response_model=StudentWorkResponse)
+@router.put("/{work_id}", response_model=GenericResponse[StudentWorkResponse])
 async def update_student_work(
     work_id: int,
     work_data: StudentWorkUpdate,
@@ -386,10 +391,11 @@ async def update_student_work(
     db.commit()
     db.refresh(work)
     
-    return StudentWorkResponse.model_validate(work)
+    work_response = StudentWorkResponse.model_validate(work)
+    return success_response(data=work_response)
 
 
-@router.delete("/{work_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{work_id}", response_model=GenericResponse[None])
 async def delete_student_work(
     work_id: int,
     db: Annotated[Session, Depends(get_db)],
@@ -420,5 +426,5 @@ async def delete_student_work(
     db.delete(work)
     db.commit()
     
-    return None
+    return success_response(data=None)
 

@@ -11,6 +11,7 @@ from app.models.user import User
 from app.schemas.student import (
     StudentCreate, StudentUpdate, StudentResponse
 )
+from app.schemas.response import GenericResponse, success_response, created_response
 from app.dependencies import get_current_active_user
 from app.exceptions import NotFoundError, ConflictError
 
@@ -20,7 +21,7 @@ router = APIRouter(
 )
 
 
-@router.post("/", response_model=StudentResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=GenericResponse[StudentResponse], status_code=status.HTTP_201_CREATED)
 async def create_student(
     student_data: StudentCreate,
     db: Annotated[Session, Depends(get_db)],
@@ -40,10 +41,11 @@ async def create_student(
     db.commit()
     db.refresh(new_student)
     
-    return StudentResponse.model_validate(new_student)
+    student_response = StudentResponse.model_validate(new_student)
+    return created_response(data=student_response)
 
 
-@router.get("/", response_model=List[StudentResponse])
+@router.get("/", response_model=GenericResponse[List[StudentResponse]])
 async def list_students(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_active_user)],
@@ -68,10 +70,11 @@ async def list_students(
         )
     
     students = query.offset(skip).limit(limit).all()
-    return [StudentResponse.model_validate(student) for student in students]
+    students_list = [StudentResponse.model_validate(student) for student in students]
+    return success_response(data=students_list)
 
 
-@router.get("/{student_id}", response_model=StudentResponse)
+@router.get("/{student_id}", response_model=GenericResponse[StudentResponse])
 async def get_student(
     student_id: int,
     db: Annotated[Session, Depends(get_db)],
@@ -84,10 +87,11 @@ async def get_student(
     if not student:
         raise NotFoundError("Estudiante", str(student_id))
     
-    return StudentResponse.model_validate(student)
+    student_response = StudentResponse.model_validate(student)
+    return success_response(data=student_response)
 
 
-@router.put("/{student_id}", response_model=StudentResponse)
+@router.put("/{student_id}", response_model=GenericResponse[StudentResponse])
 async def update_student(
     student_id: int,
     student_data: StudentUpdate,
@@ -115,10 +119,11 @@ async def update_student(
     db.commit()
     db.refresh(student)
     
-    return StudentResponse.model_validate(student)
+    student_response = StudentResponse.model_validate(student)
+    return success_response(data=student_response)
 
 
-@router.delete("/{student_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{student_id}", response_model=GenericResponse[None])
 async def delete_student(
     student_id: int,
     db: Annotated[Session, Depends(get_db)],
@@ -134,7 +139,7 @@ async def delete_student(
     db.delete(student)
     db.commit()
     
-    return None
+    return success_response(data=None)
 
 
 

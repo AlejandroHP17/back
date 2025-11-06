@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User
 from app.schemas.user import UserCreate, UserRegister, UserResponse, Token
+from app.schemas.response import GenericResponse, success_response, created_response
 from app.security import verify_password, get_password_hash, create_access_token
 from app.dependencies import get_current_user
 from app.exceptions import UnauthorizedError, ConflictError
@@ -19,7 +20,7 @@ router = APIRouter(
 )
 
 
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=GenericResponse[UserResponse], status_code=status.HTTP_201_CREATED)
 async def register(
     user_data: UserRegister,
     db: Annotated[Session, Depends(get_db)]
@@ -78,10 +79,11 @@ async def register(
     db.refresh(new_user)
     
     # Limpiar relaciones antes de devolver
-    return UserResponse.model_validate(new_user)
+    user_response = UserResponse.model_validate(new_user)
+    return created_response(data=user_response)
 
 
-@router.post("/login", response_model=Token)
+@router.post("/login", response_model=GenericResponse[Token])
 async def login(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: Annotated[Session, Depends(get_db)]
@@ -106,18 +108,20 @@ async def login(
         data={"sub": str(user.id), "email": user.email, "access_level_id": user.access_level_id}
     )
     
-    return {
-        "access_token": access_token,
-        "token_type": "bearer"
-    }
+    token_data = Token(
+        access_token=access_token,
+        token_type="bearer"
+    )
+    return success_response(data=token_data)
 
 
-@router.get("/me", response_model=UserResponse)
+@router.get("/me", response_model=GenericResponse[UserResponse])
 async def get_current_user_info(
     current_user: Annotated[User, Depends(get_current_user)]
 ):
     """
     Obtiene la información del usuario autenticado.
     """
-    return UserResponse.model_validate(current_user)
+    user_response = UserResponse.model_validate(current_user)
+    return success_response(data=user_response)
 
