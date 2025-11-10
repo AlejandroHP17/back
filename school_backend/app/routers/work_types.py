@@ -203,7 +203,7 @@ async def update_work_type(
         )
 
 
-@router.delete("/{work_type_id}", response_model=GenericResponse[None])
+@router.delete("/{work_type_id}", response_model=GenericResponse[str])
 async def delete_work_type(
     work_type_id: int,
     db: Annotated[Session, Depends(get_db)],
@@ -228,7 +228,7 @@ async def delete_work_type(
     try:
         db.delete(work_type)
         db.commit()
-        return success_response(data=None)
+        return success_response(data="El elemento se ha borrado correctamente")
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error de base de datos al eliminar tipo de trabajo: {str(e)}")

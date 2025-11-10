@@ -447,7 +447,7 @@ async def update_attendance(
     return success_response(data=attendance_response)
 
 
-@router.delete("/{attendance_id}", response_model=GenericResponse[None])
+@router.delete("/{attendance_id}", response_model=GenericResponse[str])
 async def delete_attendance(
     attendance_id: int,
     db: Annotated[Session, Depends(get_db)],
@@ -477,5 +477,5 @@ async def delete_attendance(
     db.delete(attendance)
     db.commit()
     
-    return success_response(data=None)
+    return success_response(data="El elemento se ha borrado correctamente")
 

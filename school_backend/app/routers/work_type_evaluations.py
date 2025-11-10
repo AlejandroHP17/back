@@ -296,7 +296,7 @@ async def update_work_type_evaluation(
     return success_response(data=eval_response)
 
 
-@router.delete("/{evaluation_id}", response_model=GenericResponse[None])
+@router.delete("/{evaluation_id}", response_model=GenericResponse[str])
 async def delete_work_type_evaluation(
     evaluation_id: int,
     db: Annotated[Session, Depends(get_db)],
@@ -333,5 +333,5 @@ async def delete_work_type_evaluation(
     db.delete(evaluation)
     db.commit()
     
-    return success_response(data=None)
+    return success_response(data="El elemento se ha borrado correctamente")
 

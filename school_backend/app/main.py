@@ -89,7 +89,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     )
     return JSONResponse(
         status_code=exc.status_code,
-        content=response.model_dump()
+        content=response.model_dump(mode='json')
     )
 
 
@@ -107,7 +107,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content=response.model_dump()
+        content=response.model_dump(mode='json')
     )
 
 
@@ -142,7 +142,7 @@ async def integrity_error_handler(request: Request, exc: IntegrityError):
     )
     return JSONResponse(
         status_code=status.HTTP_409_CONFLICT,
-        content=response.model_dump()
+        content=response.model_dump(mode='json')
     )
 
 
@@ -172,7 +172,7 @@ async def sqlalchemy_error_handler(request: Request, exc: SQLAlchemyError):
     )
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content=response.model_dump()
+        content=response.model_dump(mode='json')
     )
 
 
@@ -185,11 +185,24 @@ async def general_exception_handler(request: Request, exc: Exception):
     response_data = None
     
     if settings.DEBUG:
+        # Convertir el error a string de forma segura, manejando bytes
+        error_detail = str(exc)
+        if isinstance(exc, bytes):
+            try:
+                error_detail = exc.decode('utf-8')
+            except (UnicodeDecodeError, AttributeError):
+                error_detail = repr(exc)
+        elif hasattr(exc, '__bytes__'):
+            try:
+                error_detail = bytes(exc).decode('utf-8')
+            except (UnicodeDecodeError, AttributeError):
+                error_detail = str(exc)
+        
         response_data = {
             "error_type": type(exc).__name__,
-            "error_detail": str(exc)
+            "error_detail": error_detail
         }
-        error_message = get_error_message(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc))
+        error_message = get_error_message(status.HTTP_500_INTERNAL_SERVER_ERROR, error_detail)
     
     response = GenericResponse(
         data=response_data,
@@ -200,6 +213,6 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content=response.model_dump()
+        content=response.model_dump(mode='json')
     )
 

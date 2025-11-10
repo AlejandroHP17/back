@@ -18,6 +18,7 @@ DROP TABLE IF EXISTS formative_fields;
 DROP TABLE IF EXISTS partials;
 DROP TABLE IF EXISTS students;
 DROP TABLE IF EXISTS school_cycles;
+DROP TABLE IF EXISTS devices;
 DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS access_codes;
 DROP TABLE IF EXISTS schools;
@@ -109,6 +110,26 @@ CREATE TABLE users (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE INDEX idx_users_access_level ON users(access_level_id);
+
+-- ======================================================
+-- Dispositivos móviles (IMEI) asociados a usuarios
+-- ======================================================
+CREATE TABLE devices (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    imei VARCHAR(500) NOT NULL,
+    latitude DECIMAL(10,6),
+    longitude DECIMAL(10,6),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    last_login_at DATETIME NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_devices_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE KEY idx_user_imei (user_id, imei)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE INDEX idx_devices_user ON devices(user_id);
+CREATE INDEX idx_devices_imei ON devices(imei);
 
 -- ======================================================
 -- Ciclos escolares (creados por el profesor)

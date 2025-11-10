@@ -29,6 +29,7 @@ async def create_student(
 ):
     """
     Crea un nuevo estudiante.
+    El teacher_id se establece automáticamente al profesor autenticado.
     """
     # Verificar CURP único si se proporciona
     if student_data.curp:
@@ -36,7 +37,11 @@ async def create_student(
         if existing_student:
             raise ConflictError(f"El CURP {student_data.curp} ya está registrado")
     
-    new_student = Student(**student_data.model_dump())
+    # Crear el estudiante con el teacher_id del usuario autenticado
+    student_dict = student_data.model_dump()
+    student_dict["teacher_id"] = current_user.id
+    
+    new_student = Student(**student_dict)
     db.add(new_student)
     db.commit()
     db.refresh(new_student)
@@ -51,13 +56,22 @@ async def list_students(
     current_user: Annotated[User, Depends(get_current_active_user)],
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
-    search: str = Query(None, description="Buscar por nombre, apellidos o CURP")
+    search: str = Query(None, description="Buscar por nombre, apellidos o CURP"),
+    school_cycle_id: int = Query(None, description="Filtrar por ciclo escolar (opcional)")
 ):
     """
-    Lista todos los estudiantes con paginación y búsqueda.
+    Lista los estudiantes del profesor autenticado con paginación y búsqueda.
+    Solo muestra los estudiantes donde el profesor autenticado es el teacher_id.
+    Opcionalmente se puede filtrar por ciclo escolar.
     """
-    query = db.query(Student)
+    # Filtrar por el profesor autenticado
+    query = db.query(Student).filter(Student.teacher_id == current_user.id)
     
+    # Filtro opcional por ciclo escolar
+    if school_cycle_id is not None:
+        query = query.filter(Student.school_cycle_id == school_cycle_id)
+    
+    # Filtro opcional de búsqueda por texto
     if search:
         search_pattern = f"%{search}%"
         query = query.filter(
@@ -82,8 +96,12 @@ async def get_student(
 ):
     """
     Obtiene un estudiante por ID.
+    Solo permite acceder a estudiantes del profesor autenticado.
     """
-    student = db.query(Student).filter(Student.id == student_id).first()
+    student = db.query(Student).filter(
+        Student.id == student_id,
+        Student.teacher_id == current_user.id
+    ).first()
     if not student:
         raise NotFoundError("Estudiante", str(student_id))
     
@@ -100,8 +118,12 @@ async def update_student(
 ):
     """
     Actualiza un estudiante.
+    Solo permite actualizar estudiantes del profesor autenticado.
     """
-    student = db.query(Student).filter(Student.id == student_id).first()
+    student = db.query(Student).filter(
+        Student.id == student_id,
+        Student.teacher_id == current_user.id
+    ).first()
     if not student:
         raise NotFoundError("Estudiante", str(student_id))
     
@@ -123,7 +145,7 @@ async def update_student(
     return success_response(data=student_response)
 
 
-@router.delete("/{student_id}", response_model=GenericResponse[None])
+@router.delete("/{student_id}", response_model=GenericResponse[str])
 async def delete_student(
     student_id: int,
     db: Annotated[Session, Depends(get_db)],
@@ -131,15 +153,19 @@ async def delete_student(
 ):
     """
     Elimina un estudiante.
+    Solo permite eliminar estudiantes del profesor autenticado.
     """
-    student = db.query(Student).filter(Student.id == student_id).first()
+    student = db.query(Student).filter(
+        Student.id == student_id,
+        Student.teacher_id == current_user.id
+    ).first()
     if not student:
         raise NotFoundError("Estudiante", str(student_id))
     
     db.delete(student)
     db.commit()
     
-    return success_response(data=None)
+    return success_response(data="El elemento se ha borrado correctamente")
 
 
 

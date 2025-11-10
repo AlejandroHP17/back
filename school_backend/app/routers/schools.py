@@ -6,9 +6,11 @@ from fastapi import APIRouter, Depends, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from app.database import get_db
-from app.models.catalog import School
+from app.models.catalog import School, PeriodCatalog
+from sqlalchemy.orm import joinedload
 from app.models.user import User
 from app.schemas.school import SchoolCreate, SchoolUpdate, SchoolResponse
+from app.schemas.catalog import PeriodCatalogResponse
 from app.schemas.response import GenericResponse, success_response, created_response
 from app.dependencies import get_current_active_user, require_access_level
 from app.exceptions import NotFoundError, ConflictError
@@ -39,7 +41,29 @@ async def create_school(
     db.commit()
     db.refresh(new_school)
     
-    school_response = SchoolResponse.model_validate(new_school)
+    # Recargar la escuela con la relación shift
+    school_with_shift = db.query(School).options(joinedload(School.shift)).filter(School.id == new_school.id).first()
+    
+    # Obtener todos los periodos del catálogo
+    period_catalog_list = db.query(PeriodCatalog).order_by(PeriodCatalog.type_name, PeriodCatalog.period_number).all()
+    period_catalog_response = [PeriodCatalogResponse.model_validate(period) for period in period_catalog_list]
+    
+    # Crear la respuesta de la escuela
+    school_dict = {
+        "id": school_with_shift.id,
+        "cct": school_with_shift.cct,
+        "school_type_id": school_with_shift.school_type_id,
+        "name": school_with_shift.name,
+        "postal_code": school_with_shift.postal_code,
+        "latitude": school_with_shift.latitude,
+        "longitude": school_with_shift.longitude,
+        "shift_id": school_with_shift.shift_id,
+        "shift_name": school_with_shift.shift.name if school_with_shift.shift else None,
+        "created_at": school_with_shift.created_at,
+        "period_catalog": period_catalog_response
+    }
+    
+    school_response = SchoolResponse.model_validate(school_dict)
     return created_response(data=school_response)
 
 
@@ -53,8 +77,9 @@ async def list_schools(
 ):
     """
     Lista todas las escuelas con paginación y búsqueda.
+    Incluye el catálogo completo de periodos y el nombre del turno.
     """
-    query = db.query(School)
+    query = db.query(School).options(joinedload(School.shift))
     
     if search:
         search_pattern = f"%{search}%"
@@ -66,7 +91,29 @@ async def list_schools(
         )
     
     schools = query.offset(skip).limit(limit).all()
-    schools_list = [SchoolResponse.model_validate(school) for school in schools]
+    
+    # Obtener todos los periodos del catálogo (una sola vez para todas las escuelas)
+    period_catalog_list = db.query(PeriodCatalog).order_by(PeriodCatalog.type_name, PeriodCatalog.period_number).all()
+    period_catalog_response = [PeriodCatalogResponse.model_validate(period) for period in period_catalog_list]
+    
+    # Construir la lista de escuelas con shift_name y period_catalog
+    schools_list = []
+    for school in schools:
+        school_dict = {
+            "id": school.id,
+            "cct": school.cct,
+            "school_type_id": school.school_type_id,
+            "name": school.name,
+            "postal_code": school.postal_code,
+            "latitude": school.latitude,
+            "longitude": school.longitude,
+            "shift_id": school.shift_id,
+            "shift_name": school.shift.name if school.shift else None,
+            "created_at": school.created_at,
+            "period_catalog": period_catalog_response
+        }
+        schools_list.append(SchoolResponse.model_validate(school_dict))
+    
     return success_response(data=schools_list)
 
 
@@ -78,12 +125,32 @@ async def get_school(
 ):
     """
     Obtiene una escuela por CCT (Clave de Centro de Trabajo).
+    Incluye el catálogo completo de periodos y el nombre del turno.
     """
-    school = db.query(School).filter(School.cct == cct).first()
+    school = db.query(School).options(joinedload(School.shift)).filter(School.cct == cct).first()
     if not school:
         raise NotFoundError("Escuela", cct)
     
-    school_response = SchoolResponse.model_validate(school)
+    # Obtener todos los periodos del catálogo
+    period_catalog_list = db.query(PeriodCatalog).order_by(PeriodCatalog.type_name, PeriodCatalog.period_number).all()
+    period_catalog_response = [PeriodCatalogResponse.model_validate(period) for period in period_catalog_list]
+    
+    # Crear la respuesta de la escuela
+    school_dict = {
+        "id": school.id,
+        "cct": school.cct,
+        "school_type_id": school.school_type_id,
+        "name": school.name,
+        "postal_code": school.postal_code,
+        "latitude": school.latitude,
+        "longitude": school.longitude,
+        "shift_id": school.shift_id,
+        "shift_name": school.shift.name if school.shift else None,
+        "created_at": school.created_at,
+        "period_catalog": period_catalog_response
+    }
+    
+    school_response = SchoolResponse.model_validate(school_dict)
     return success_response(data=school_response)
 
 
@@ -115,11 +182,33 @@ async def update_school(
     db.commit()
     db.refresh(school)
     
-    school_response = SchoolResponse.model_validate(school)
+    # Recargar la escuela con la relación shift
+    school_with_shift = db.query(School).options(joinedload(School.shift)).filter(School.cct == cct).first()
+    
+    # Obtener todos los periodos del catálogo
+    period_catalog_list = db.query(PeriodCatalog).order_by(PeriodCatalog.type_name, PeriodCatalog.period_number).all()
+    period_catalog_response = [PeriodCatalogResponse.model_validate(period) for period in period_catalog_list]
+    
+    # Crear la respuesta de la escuela
+    school_dict = {
+        "id": school_with_shift.id,
+        "cct": school_with_shift.cct,
+        "school_type_id": school_with_shift.school_type_id,
+        "name": school_with_shift.name,
+        "postal_code": school_with_shift.postal_code,
+        "latitude": school_with_shift.latitude,
+        "longitude": school_with_shift.longitude,
+        "shift_id": school_with_shift.shift_id,
+        "shift_name": school_with_shift.shift.name if school_with_shift.shift else None,
+        "created_at": school_with_shift.created_at,
+        "period_catalog": period_catalog_response
+    }
+    
+    school_response = SchoolResponse.model_validate(school_dict)
     return success_response(data=school_response)
 
 
-@router.delete("/{cct}", response_model=GenericResponse[None])
+@router.delete("/{cct}", response_model=GenericResponse[str])
 async def delete_school(
     cct: str,
     db: Annotated[Session, Depends(get_db)],
@@ -136,5 +225,5 @@ async def delete_school(
     db.delete(school)
     db.commit()
     
-    return success_response(data=None)
+    return success_response(data="El elemento se ha borrado correctamente")
 

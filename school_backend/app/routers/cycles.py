@@ -108,7 +108,7 @@ async def update_cycle(
     return success_response(data=cycle_response)
 
 
-@router.delete("/{cycle_id}", response_model=GenericResponse[None])
+@router.delete("/{cycle_id}", response_model=GenericResponse[str])
 async def delete_cycle(
     cycle_id: int,
     db: Annotated[Session, Depends(get_db)],
@@ -124,5 +124,5 @@ async def delete_cycle(
     db.delete(cycle)
     db.commit()
     
-    return success_response(data=None)
+    return success_response(data="El elemento se ha borrado correctamente")
 

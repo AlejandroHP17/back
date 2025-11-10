@@ -11,6 +11,7 @@ from app.models.catalog import (
 )
 from app.models.catalog import School
 from app.models.user import User, AccessCode
+from app.models.device import Device
 from app.models.cycle import SchoolCycle
 from app.models.student import Student
 from app.models.partial import Partial
@@ -29,6 +30,7 @@ __all__ = [
     "School",
     "User",
     "AccessCode",
+    "Device",
     "SchoolCycle",
     "Student",
     "Partial",

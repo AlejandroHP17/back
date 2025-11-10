@@ -34,6 +34,7 @@ class User(Base):
     work_types = relationship("WorkType", back_populates="teacher")
     student_works = relationship("StudentWork", back_populates="teacher")
     students = relationship("Student", back_populates="teacher")
+    devices = relationship("Device", back_populates="user")
     
     @property
     def full_name(self) -> str:

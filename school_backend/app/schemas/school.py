@@ -3,8 +3,9 @@ Schemas para escuelas.
 """
 from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from decimal import Decimal
+from app.schemas.catalog import PeriodCatalogResponse
 
 
 class SchoolBase(BaseModel):
@@ -16,6 +17,7 @@ class SchoolBase(BaseModel):
     latitude: Optional[Decimal] = Field(None, description="Latitud")
     longitude: Optional[Decimal] = Field(None, description="Longitud")
     shift_id: Optional[int] = Field(None, description="ID del turno")
+    shift_name: Optional[str] = Field(None, description="Nombre del turno")
 
 
 class SchoolCreate(SchoolBase):
@@ -38,6 +40,7 @@ class SchoolResponse(SchoolBase):
     """Schema de respuesta para escuela."""
     id: int
     created_at: datetime
+    period_catalog: Optional[List[PeriodCatalogResponse]] = Field(None, description="Catálogo de periodos disponibles")
     
     model_config = ConfigDict(from_attributes=True)
 

@@ -395,7 +395,7 @@ async def update_student_work(
     return success_response(data=work_response)
 
 
-@router.delete("/{work_id}", response_model=GenericResponse[None])
+@router.delete("/{work_id}", response_model=GenericResponse[str])
 async def delete_student_work(
     work_id: int,
     db: Annotated[Session, Depends(get_db)],
@@ -426,5 +426,5 @@ async def delete_student_work(
     db.delete(work)
     db.commit()
     
-    return success_response(data=None)
+    return success_response(data="El elemento se ha borrado correctamente")
 

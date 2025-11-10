@@ -8,11 +8,13 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User
-from app.schemas.user import UserCreate, UserRegister, UserResponse, Token
+from app.models.device import Device
+from app.schemas.user import UserCreate, UserRegister, UserResponse, Token, UserLogin
 from app.schemas.response import GenericResponse, success_response, created_response
-from app.security import verify_password, get_password_hash, create_access_token
+from app.security import verify_password, get_password_hash, create_access_token, validate_imei, validate_coordinates
 from app.dependencies import get_current_user
 from app.exceptions import UnauthorizedError, ConflictError
+from decimal import Decimal
 
 router = APIRouter(
     prefix="/auth",
@@ -85,23 +87,69 @@ async def register(
 
 @router.post("/login", response_model=GenericResponse[Token])
 async def login(
-    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+    login_data: UserLogin,
     db: Annotated[Session, Depends(get_db)]
 ):
     """
-    Autentica un usuario y retorna un token JWT.
+    Autentica un usuario con validación de IMEI y coordenadas, y retorna un token JWT.
+    Requiere: email, password, imei (15 dígitos) y coordenadas (latitude, longitude).
     """
-    # Buscar usuario por email (OAuth2PasswordRequestForm usa 'username')
-    user = db.query(User).filter(User.email == form_data.username).first()
+    # Buscar usuario por email
+    user = db.query(User).filter(User.email == login_data.email).first()
     
     if not user:
         raise UnauthorizedError("Credenciales inválidas")
     
-    if not verify_password(form_data.password, user.password_hash):
+    if not verify_password(login_data.password, user.password_hash):
         raise UnauthorizedError("Credenciales inválidas")
     
     if not user.is_active:
         raise UnauthorizedError("Usuario inactivo")
+    
+    # Validar formato del identificador del dispositivo
+    if not validate_imei(login_data.imei):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Identificador del dispositivo inválido. Debe ser una combinación válida de Build.FINGERPRINT + Build.ID."
+        )
+    
+    # Validar que las coordenadas estén dentro de México
+    is_valid, error_message = validate_coordinates(
+        login_data.latitude, 
+        login_data.longitude
+    )
+    
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=error_message
+        )
+    
+    # Buscar o crear dispositivo
+    device = db.query(Device).filter(
+        Device.user_id == user.id,
+        Device.imei == login_data.imei
+    ).first()
+    
+    if device:
+        # Actualizar coordenadas y último login
+        device.latitude = Decimal(str(login_data.latitude))
+        device.longitude = Decimal(str(login_data.longitude))
+        device.last_login_at = datetime.utcnow()
+        device.is_active = True
+    else:
+        # Crear nuevo dispositivo
+        device = Device(
+            user_id=user.id,
+            imei=login_data.imei,
+            latitude=Decimal(str(login_data.latitude)),
+            longitude=Decimal(str(login_data.longitude)),
+            is_active=True,
+            last_login_at=datetime.utcnow()
+        )
+        db.add(device)
+    
+    db.commit()
     
     # Crear token JWT (sub debe ser string según JWT spec)
     access_token = create_access_token(

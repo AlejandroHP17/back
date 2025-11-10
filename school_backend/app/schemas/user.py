@@ -50,9 +50,12 @@ class UserResponse(UserBase):
 
 
 class UserLogin(BaseModel):
-    """Schema para login de usuario."""
+    """Schema para login de usuario con validación de seguridad."""
     email: EmailStr = Field(..., description="Correo electrónico")
     password: str = Field(..., description="Contraseña")
+    imei: str = Field(..., min_length=1, max_length=500, description="Identificador único del dispositivo (Build.FINGERPRINT + Build.ID)")
+    latitude: float = Field(..., ge=-90.0, le=90.0, description="Latitud de la ubicación del dispositivo")
+    longitude: float = Field(..., ge=-180.0, le=180.0, description="Longitud de la ubicación del dispositivo")
 
 
 class Token(BaseModel):

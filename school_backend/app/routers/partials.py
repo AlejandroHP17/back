@@ -178,7 +178,7 @@ async def update_partial(
     return success_response(data=partial_response)
 
 
-@router.delete("/{partial_id}", response_model=GenericResponse[None])
+@router.delete("/{partial_id}", response_model=GenericResponse[str])
 async def delete_partial(
     partial_id: int,
     db: Annotated[Session, Depends(get_db)],
@@ -208,5 +208,5 @@ async def delete_partial(
     db.delete(partial)
     db.commit()
     
-    return success_response(data=None)
+    return success_response(data="El elemento se ha borrado correctamente")
 
