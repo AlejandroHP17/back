@@ -239,14 +239,15 @@ async def create_formative_field_bulk(
     
     Flujo:
     1. Crea el campo formativo (ej: "Español", "Matemáticas")
-    2. Crea work-types nuevos o usa existentes (pueden ser "tareas", "examen", etc.)
-    3. Crea evaluaciones con porcentajes para los work-types nuevos
+    2. Crea work-types nuevos o reutiliza existentes (pueden ser "tareas", "examen", etc.)
+    3. Crea evaluaciones con porcentajes para los work-types (nuevos o existentes)
     
-    Los work-types pueden ser:
-    - Nuevos: se crean con el nombre proporcionado
-    - Existentes: se usan por ID (deben pertenecer al profesor autenticado)
+    Los work-types:
+    - Si existe por nombre para el profesor: se reutiliza (no se crea duplicado)
+    - Si no existe: se crea uno nuevo con el nombre proporcionado
+    - Si se proporciona ID: se usa el existente (debe pertenecer al profesor)
     
-    Las evaluaciones solo se crean para work-types nuevos.
+    Las evaluaciones se pueden crear para work-types nuevos o existentes.
     """
     # Verificar que el ciclo escolar existe y pertenece al profesor
     school_cycle = db.query(SchoolCycle).filter(
@@ -262,10 +263,11 @@ async def create_formative_field_bulk(
             detail="No tienes permiso para crear campos formativos en este ciclo escolar."
         )
     
-    # Validar work-types: si tiene ID, debe existir y pertenecer al profesor; si no tiene ID, debe tener nombre
-    work_type_map = {}  # Mapeo de nombre -> ID para work-types nuevos
-    existing_work_type_ids = set()
+    # Mapeo de nombre -> ID para todos los work-types (nuevos y existentes)
+    work_type_name_to_id = {}  # Mapeo de nombre -> ID
+    valid_work_type_ids = set()  # Set de IDs válidos
     
+    # Primero, procesar todos los work-types para construir el mapa
     for wt_item in bulk_data.work_types:
         if wt_item.id is not None:
             # Verificar que el work-type existente pertenece al profesor
@@ -277,23 +279,30 @@ async def create_formative_field_bulk(
             if not existing_wt:
                 raise NotFoundError(f"Work-type con ID {wt_item.id}", "No existe o no pertenece al profesor")
             
-            existing_work_type_ids.add(wt_item.id)
+            # Agregar al mapa y al set
+            work_type_name_to_id[existing_wt.name] = existing_wt.id
+            valid_work_type_ids.add(existing_wt.id)
         else:
-            # Work-type nuevo: debe tener nombre
+            # Work-type por nombre: debe tener nombre
             if not wt_item.name:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Los work-types nuevos deben tener un nombre"
+                    detail="Los work-types deben tener un nombre"
                 )
             
-            # Verificar que no existe ya un work-type con ese nombre para este profesor
+            # Verificar si ya existe un work-type con ese nombre para este profesor
             existing_wt = db.query(WorkType).filter(
                 WorkType.name == wt_item.name,
                 WorkType.teacher_id == current_user.id
             ).first()
             
             if existing_wt:
-                raise ConflictError(f"Ya existe un work-type con el nombre '{wt_item.name}' para este profesor. Usa el ID {existing_wt.id} en su lugar.")
+                # Reutilizar el work-type existente
+                work_type_name_to_id[wt_item.name] = existing_wt.id
+                valid_work_type_ids.add(existing_wt.id)
+            else:
+                # Se creará uno nuevo más adelante, guardar el nombre para referencia
+                work_type_name_to_id[wt_item.name] = None  # Marcador para crear nuevo
     
     # Crear el campo formativo
     new_field = FormativeField(
@@ -304,28 +313,65 @@ async def create_formative_field_bulk(
     db.add(new_field)
     db.flush()  # Para obtener el ID sin hacer commit
     
-    # Crear work-types nuevos
+    # Crear work-types nuevos (solo los que no existen)
     for wt_item in bulk_data.work_types:
-        if wt_item.id is None:
-            # Crear nuevo work-type
-            new_wt = WorkType(
-                teacher_id=current_user.id,
-                name=wt_item.name
-            )
-            db.add(new_wt)
-            db.flush()  # Para obtener el ID
-            work_type_map[wt_item.name] = new_wt.id
+        if wt_item.id is None and wt_item.name in work_type_name_to_id and work_type_name_to_id[wt_item.name] is None:
+            # Verificar nuevamente si existe (por si acaso)
+            existing_wt = db.query(WorkType).filter(
+                WorkType.name == wt_item.name,
+                WorkType.teacher_id == current_user.id
+            ).first()
+            
+            if not existing_wt:
+                # Crear nuevo work-type
+                new_wt = WorkType(
+                    teacher_id=current_user.id,
+                    name=wt_item.name
+                )
+                db.add(new_wt)
+                db.flush()  # Para obtener el ID
+                work_type_name_to_id[wt_item.name] = new_wt.id
+                valid_work_type_ids.add(new_wt.id)
+            else:
+                # Si existe, actualizar el mapa
+                work_type_name_to_id[wt_item.name] = existing_wt.id
+                valid_work_type_ids.add(existing_wt.id)
     
     # Validar y crear evaluaciones
     for eval_item in bulk_data.evaluations:
-        # Verificar que el work-type_name corresponde a un work-type nuevo
-        if eval_item.work_type_name not in work_type_map:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"El work-type '{eval_item.work_type_name}' no es un work-type nuevo. Las evaluaciones solo se pueden crear para work-types nuevos."
-            )
-        
-        work_type_id = work_type_map[eval_item.work_type_name]
+        # Determinar el work_type_id: si es null, buscar por nombre
+        if eval_item.work_type_id is not None:
+            # Usar el ID proporcionado
+            work_type_id = eval_item.work_type_id
+            
+            # Verificar que el work_type_id está en el set de IDs válidos
+            if work_type_id not in valid_work_type_ids:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"El work-type con ID {work_type_id} no está en la lista de work-types proporcionados."
+                )
+        else:
+            # Buscar por nombre
+            if not eval_item.work_type_name:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Debe proporcionar work_type_id o work_type_name en la evaluación."
+                )
+            
+            # Verificar que el nombre está en el mapa
+            if eval_item.work_type_name not in work_type_name_to_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"El work-type '{eval_item.work_type_name}' no está en la lista de work-types proporcionados."
+                )
+            
+            work_type_id = work_type_name_to_id[eval_item.work_type_name]
+            
+            if work_type_id is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Error interno: el work-type '{eval_item.work_type_name}' no tiene ID asignado."
+                )
         
         # Verificar que el partial existe y pertenece al mismo ciclo escolar
         partial = db.query(Partial).filter(Partial.id == eval_item.partial_id).first()
@@ -349,7 +395,7 @@ async def create_formative_field_bulk(
         if existing_eval:
             raise ConflictError(
                 f"Ya existe una evaluación para el campo formativo '{bulk_data.name}', "
-                f"parcial {eval_item.partial_id} y work-type '{eval_item.work_type_name}'"
+                f"parcial {eval_item.partial_id} y work-type ID {eval_item.work_type_id}"
             )
         
         # Crear la evaluación
