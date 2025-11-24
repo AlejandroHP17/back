@@ -9,6 +9,7 @@ from jose.exceptions import JWTError, ExpiredSignatureError
 import bcrypt
 import math
 from fastapi import HTTPException, status
+from sqlalchemy.orm import Session
 from app.config import settings
 
 
@@ -36,7 +37,7 @@ def create_access_token(
     expires_delta: Optional[timedelta] = None
 ) -> str:
     """
-    Crea un token JWT de acceso.
+    Crea un token JWT de acceso (válido por 20 minutos por defecto).
     
     Args:
         data: Datos a incluir en el token (usuario, roles, etc.)
@@ -55,13 +56,133 @@ def create_access_token(
     
     # El "exp" debe ser un timestamp (número), no un datetime
     # jwt.encode acepta datetime y lo convierte automáticamente, pero asegurémonos
-    to_encode.update({"exp": expire})
+    to_encode.update({"exp": expire, "type": "access"})
     encoded_jwt = jwt.encode(
         to_encode,
         settings.SECRET_KEY,
         algorithm=settings.ALGORITHM
     )
     return encoded_jwt
+
+
+def create_refresh_token(
+    data: dict,
+    expires_delta: Optional[timedelta] = None
+) -> str:
+    """
+    Crea un token JWT de refresco (válido por 3 meses por defecto).
+    
+    Args:
+        data: Datos a incluir en el token (usuario, etc.)
+        expires_delta: Tiempo de expiración personalizado
+        
+    Returns:
+        Token JWT codificado
+    """
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.now(timezone.utc) + expires_delta
+    else:
+        expire = datetime.now(timezone.utc) + timedelta(
+            days=settings.REFRESH_TOKEN_EXPIRE_DAYS
+        )
+    
+    to_encode.update({"exp": expire, "type": "refresh"})
+    encoded_jwt = jwt.encode(
+        to_encode,
+        settings.SECRET_KEY,
+        algorithm=settings.ALGORITHM
+    )
+    return encoded_jwt
+
+
+def decode_refresh_token(token: str) -> dict:
+    """
+    Decodifica y valida un refresh token JWT.
+    
+    Args:
+        token: Refresh token JWT a decodificar
+        
+    Returns:
+        Payload del token
+        
+    Raises:
+        HTTPException: Si el token es inválido, ha expirado o no es un refresh token
+    """
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token no proporcionado",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Limpiar espacios en blanco al inicio y final
+    token = token.strip()
+    
+    # Validar formato básico del token
+    parts = token.split(".")
+    if len(parts) != 3:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Refresh token con formato inválido: debe tener 3 partes separadas por puntos, pero tiene {len(parts)}",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Validar que cada parte no esté vacía
+    for i, part in enumerate(parts, 1):
+        if not part:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"Refresh token inválido: la parte {i} está vacía.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    
+    if len(parts[2]) < 20:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Refresh token inválido: la firma del token parece estar incompleta.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    try:
+        payload = jwt.decode(
+            token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM]
+        )
+        
+        # Verificar que sea un refresh token
+        token_type = payload.get("type")
+        if token_type != "refresh":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token inválido: no es un refresh token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        return payload
+    except ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token expirado",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except JWTError as e:
+        error_message = str(e)
+        
+        if "padding" in error_message.lower():
+            detail = (
+                "Refresh token inválido: error de padding criptográfico. "
+                "Esto generalmente indica que el token está incompleto, truncado o corrupto."
+            )
+        else:
+            detail = f"Refresh token inválido: {error_message}"
+        
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=detail,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
 def decode_access_token(token: str) -> dict:
@@ -120,6 +241,16 @@ def decode_access_token(token: str) -> dict:
             settings.SECRET_KEY,
             algorithms=[settings.ALGORITHM]
         )
+        
+        # Verificar que sea un access token (opcional, para mayor seguridad)
+        token_type = payload.get("type")
+        if token_type and token_type != "access":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token inválido: no es un access token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
         return payload
     except ExpiredSignatureError:
         raise HTTPException(
@@ -255,4 +386,34 @@ def validate_coordinates(latitude: float, longitude: float) -> Tuple[bool, Optio
         )
     
     return True, None
+
+
+def cleanup_expired_refresh_tokens(db: Session) -> int:
+    """
+    Limpia los refresh tokens expirados de la base de datos.
+    
+    Args:
+        db: Sesión de base de datos
+        
+    Returns:
+        Número de tokens eliminados
+    """
+    from app.models.refresh_token import RefreshToken
+    from datetime import datetime
+    
+    try:
+        # Eliminar tokens expirados o inactivos
+        deleted_count = db.query(RefreshToken).filter(
+            (RefreshToken.expires_at < datetime.utcnow()) | (RefreshToken.is_active == False)
+        ).delete()
+        
+        db.commit()
+        return deleted_count
+    except Exception as e:
+        db.rollback()
+        # Log del error pero no lanzar excepción para que no afecte otras operaciones
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error al limpiar tokens expirados: {str(e)}")
+        return 0
 

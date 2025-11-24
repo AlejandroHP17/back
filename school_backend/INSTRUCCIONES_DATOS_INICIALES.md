@@ -38,7 +38,7 @@ mysql -u root -p re_db
 
 -- Catálogos: school_types
 INSERT INTO school_types (name) VALUES
-('Preescolar'),('Primaria'), ('Secundaria'), ('Bachillerato')
+('Preescolar'),('Primaria'), ('Secundaria'), ('Bachillerato'), ('Universidad')
 ON DUPLICATE KEY UPDATE name = VALUES(name);
 
 -- Catálogos: shifts

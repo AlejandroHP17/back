@@ -59,9 +59,15 @@ class UserLogin(BaseModel):
 
 
 class Token(BaseModel):
-    """Schema para token de acceso."""
+    """Schema para tokens de acceso y refresco."""
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
+
+
+class RefreshTokenRequest(BaseModel):
+    """Schema para solicitud de renovación de token."""
+    refresh_token: str = Field(..., description="Refresh token para renovar el access token")
 
 
 class AccessCodeBase(BaseModel):

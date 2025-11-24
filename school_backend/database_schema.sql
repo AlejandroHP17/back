@@ -18,6 +18,7 @@ DROP TABLE IF EXISTS formative_fields;
 DROP TABLE IF EXISTS partials;
 DROP TABLE IF EXISTS students;
 DROP TABLE IF EXISTS school_cycles;
+DROP TABLE IF EXISTS refresh_tokens;
 DROP TABLE IF EXISTS devices;
 DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS access_codes;
@@ -132,15 +133,30 @@ CREATE INDEX idx_devices_user ON devices(user_id);
 CREATE INDEX idx_devices_imei ON devices(imei);
 
 -- ======================================================
+-- Refresh Tokens (para renovación de access tokens)
+-- ======================================================
+CREATE TABLE refresh_tokens (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    token VARCHAR(500) NOT NULL UNIQUE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    expires_at DATETIME NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_refresh_tokens_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
+CREATE INDEX idx_refresh_tokens_token ON refresh_tokens(token);
+CREATE INDEX idx_refresh_tokens_expires ON refresh_tokens(expires_at);
+
+-- ======================================================
 -- Ciclos escolares (creados por el profesor)
 -- ======================================================
 CREATE TABLE school_cycles (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     school_id BIGINT UNSIGNED NOT NULL,
     teacher_id BIGINT UNSIGNED NOT NULL, -- referencia a users (profesor)
-    year YEAR NOT NULL,
     name VARCHAR(120),        -- ej "Ciclo 2024-2025 Grupo A"
-    description TEXT,
     cycle_label VARCHAR(50),  -- ej "2024-2025"
     grade VARCHAR(20),
     group_name VARCHAR(20),

@@ -12,6 +12,7 @@ from app.schemas.user import AccessCodeCreate, AccessCodeUpdate, AccessCodeRespo
 from app.schemas.response import GenericResponse, success_response, created_response
 from app.dependencies import get_current_active_user, require_access_level
 from app.exceptions import NotFoundError, ConflictError
+from app.security import cleanup_expired_refresh_tokens
 import logging
 
 logger = logging.getLogger(__name__)
@@ -161,3 +162,32 @@ async def get_access_code(
     
     code_response = AccessCodeResponse.model_validate(access_code)
     return success_response(data=code_response)
+
+
+@router.post("/cleanup-tokens", response_model=GenericResponse[dict])
+async def cleanup_expired_tokens_manual(
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_access_level("Administrador"))]
+):
+    """
+    Ejecuta manualmente la limpieza de refresh tokens expirados.
+    Requiere nivel de acceso: Administrador
+    
+    Esta función elimina todos los refresh tokens que:
+    - Han expirado (expires_at < ahora)
+    - Están marcados como inactivos (is_active = False)
+    """
+    try:
+        deleted_count = cleanup_expired_refresh_tokens(db)
+        logger.info(f"Limpieza manual ejecutada por usuario {current_user.id}: Se eliminaron {deleted_count} tokens")
+        
+        return success_response(data={
+            "deleted_count": deleted_count,
+            "message": f"Se eliminaron {deleted_count} refresh tokens expirados o inactivos"
+        })
+    except Exception as e:
+        logger.error(f"Error en limpieza manual de tokens: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al ejecutar la limpieza: {str(e)}"
+        )

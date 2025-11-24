@@ -2,18 +2,20 @@
 Router para autenticación y gestión de usuarios.
 """
 from typing import Annotated
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, status, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User
 from app.models.device import Device
-from app.schemas.user import UserCreate, UserRegister, UserResponse, Token, UserLogin
+from app.schemas.user import UserCreate, UserRegister, UserResponse, Token, UserLogin, RefreshTokenRequest
 from app.schemas.response import GenericResponse, success_response, created_response
-from app.security import verify_password, get_password_hash, create_access_token, validate_imei, validate_coordinates
+from app.security import verify_password, get_password_hash, create_access_token, create_refresh_token, decode_refresh_token, validate_imei, validate_coordinates
+from app.models.refresh_token import RefreshToken
 from app.dependencies import get_current_user
 from app.exceptions import UnauthorizedError, ConflictError
+from app.config import settings
 from decimal import Decimal
 
 router = APIRouter(
@@ -64,7 +66,7 @@ async def register(
     # Obtener el access_level_id del código
     access_level_id = access_code.access_level_id
     
-    # Crear nuevo usuario
+    # Crear nuevo usuario (is_active se establece automáticamente por el default de la BD)
     new_user = User(
         email=user_data.email,
         password_hash=get_password_hash(user_data.password),
@@ -72,8 +74,8 @@ async def register(
         last_name=None,   # Se puede actualizar después
         phone=None,       # Se puede actualizar después
         access_level_id=access_level_id,
-        access_code_id=access_code.id,  # Usar el ID del código encontrado
-        is_active=True
+        access_code_id=access_code.id  # Usar el ID del código encontrado
+        # is_active no se establece explícitamente, usa el DEFAULT TRUE de la BD
     )
     
     db.add(new_user)
@@ -151,13 +153,112 @@ async def login(
     
     db.commit()
     
-    # Crear token JWT (sub debe ser string según JWT spec)
+    # Crear access token (20 minutos)
     access_token = create_access_token(
         data={"sub": str(user.id), "email": user.email, "access_level_id": user.access_level_id}
     )
     
+    # Crear refresh token (3 meses)
+    refresh_token = create_refresh_token(
+        data={"sub": str(user.id), "email": user.email}
+    )
+    
+    # Calcular fecha de expiración del refresh token (3 meses)
+    expires_at = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    
+    # Guardar refresh token en la base de datos
+    refresh_token_db = RefreshToken(
+        user_id=user.id,
+        token=refresh_token,
+        is_active=True,
+        expires_at=expires_at
+    )
+    db.add(refresh_token_db)
+    db.commit()
+    
     token_data = Token(
         access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="bearer"
+    )
+    return success_response(data=token_data)
+
+
+@router.post("/refresh", response_model=GenericResponse[Token])
+async def refresh_access_token(
+    refresh_data: RefreshTokenRequest,
+    db: Annotated[Session, Depends(get_db)]
+):
+    """
+    Renueva el access token usando un refresh token válido.
+    Requiere: refresh_token
+    """
+    # Decodificar y validar el refresh token
+    try:
+        payload = decode_refresh_token(refresh_data.refresh_token)
+    except HTTPException:
+        raise UnauthorizedError("Refresh token inválido o expirado")
+    
+    user_id_str = payload.get("sub")
+    if not user_id_str:
+        raise UnauthorizedError("Refresh token inválido")
+    
+    try:
+        user_id = int(user_id_str)
+    except (ValueError, TypeError):
+        raise UnauthorizedError("Refresh token inválido: ID de usuario inválido")
+    
+    # Verificar que el usuario existe y está activo
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise UnauthorizedError("Usuario no encontrado")
+    
+    if not user.is_active:
+        raise UnauthorizedError("Usuario inactivo")
+    
+    # Verificar que el refresh token existe en la base de datos y está activo
+    refresh_token_db = db.query(RefreshToken).filter(
+        RefreshToken.token == refresh_data.refresh_token,
+        RefreshToken.user_id == user_id,
+        RefreshToken.is_active == True
+    ).first()
+    
+    if not refresh_token_db:
+        raise UnauthorizedError("Refresh token no encontrado o inactivo")
+    
+    # Verificar que no haya expirado (verificación adicional)
+    if refresh_token_db.expires_at < datetime.utcnow():
+        # Invalidar el token expirado
+        refresh_token_db.is_active = False
+        db.commit()
+        raise UnauthorizedError("Refresh token expirado")
+    
+    # Generar nuevo access token
+    access_token = create_access_token(
+        data={"sub": str(user.id), "email": user.email, "access_level_id": user.access_level_id}
+    )
+    
+    # Opcional: invalidar el refresh token anterior y crear uno nuevo (rotación)
+    # Por ahora, devolvemos el mismo refresh token
+    # Si quieres rotación de tokens, descomenta las siguientes líneas:
+    # refresh_token_db.is_active = False
+    # new_refresh_token = create_refresh_token(
+    #     data={"sub": str(user.id), "email": user.email}
+    # )
+    # expires_at = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    # new_refresh_token_db = RefreshToken(
+    #     user_id=user.id,
+    #     token=new_refresh_token,
+    #     is_active=True,
+    #     expires_at=expires_at
+    # )
+    # db.add(new_refresh_token_db)
+    # db.commit()
+    # refresh_token = new_refresh_token
+    
+    token_data = Token(
+        access_token=access_token,
+        refresh_token=refresh_data.refresh_token,  # Mantener el mismo refresh token
         token_type="bearer"
     )
     return success_response(data=token_data)

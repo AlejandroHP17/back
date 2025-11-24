@@ -28,7 +28,9 @@ async def create_cycle(
     """
     Crea un nuevo ciclo escolar.
     """
-    new_cycle = SchoolCycle(**cycle_data.model_dump())
+    # Excluir is_active para usar el default de la BD
+    cycle_dict = cycle_data.model_dump(exclude={"is_active"})
+    new_cycle = SchoolCycle(**cycle_dict)
     db.add(new_cycle)
     db.commit()
     db.refresh(new_cycle)

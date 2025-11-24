@@ -20,6 +20,7 @@ email-validator>=2.0.0
 
 # Utilidades
 python-multipart>=0.0.6
+APScheduler>=3.10.0
 
 # Testing (opcional)
 pytest>=7.4.0

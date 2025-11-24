@@ -35,6 +35,7 @@ class User(Base):
     student_works = relationship("StudentWork", back_populates="teacher")
     students = relationship("Student", back_populates="teacher")
     devices = relationship("Device", back_populates="user")
+    refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
     
     @property
     def full_name(self) -> str:

@@ -7,12 +7,20 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from app.database import get_db
 from app.models.work_type import WorkType
+from app.models.work_type_evaluation import WorkTypeEvaluation
+from app.models.formative_field import FormativeField
 from app.models.user import User
 from app.schemas.work_type import (
     WorkTypeCreate,
     WorkTypeUpdate,
     WorkTypeResponse
 )
+from app.schemas.work_type_detail import (
+    WorkTypeDetail,
+    WorkTypeDetailResponse  
+)
+
+
 from app.schemas.response import GenericResponse, success_response, created_response
 from app.dependencies import get_current_active_user
 from app.exceptions import NotFoundError, ConflictError
@@ -244,3 +252,50 @@ async def delete_work_type(
             detail=f"Error inesperado: {str(e)}"
         )
 
+@router.get("/by_formative_field/{formative_field_id}", response_model=GenericResponse[WorkTypeDetail])
+async def get_work_types_by_formative_field(
+    formative_field_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_active_user)]
+):
+    """
+    Obtiene los tipos de trabajo y su peso de evaluación asociados a un campo formativo.
+    """
+    # 1. Verificar que el campo formativo existe
+    formative_field = db.query(FormativeField).filter(FormativeField.id == formative_field_id).first()
+    if not formative_field:
+        raise NotFoundError("Campo formativo", str(formative_field_id))
+    
+    # 2. Obtener TODAS las evaluaciones (WorkTypeEvaluation) asociadas al campo formativo
+    # Esto incluye duplicados si un WorkType se evalúa en varios parciales.
+    evaluations = db.query(WorkTypeEvaluation).filter(
+        WorkTypeEvaluation.formative_field_id == formative_field.id
+    ).join(WorkType).order_by(WorkType.name).all()
+    
+    # 3. Agrupar/Desduplicar WorkTypes:
+    # Usamos un diccionario para quedarnos solo con un registro por WorkType (el primero que encuentre).
+    work_types_map = {} 
+    
+    for eval_item in evaluations:
+        if eval_item.work_type_id not in work_types_map:
+            # Crear el esquema de respuesta WorkTypeDetailResponse usando Pydantic
+            work_type_detail = WorkTypeDetailResponse(
+                # Nota: Asumo que el modelo WorkTypeDetailResponse fue corregido para usar aliases
+                # (id -> work_type_id, name -> work_type_name) si era necesario, o si
+                # tu modelo de DB WorkType tiene los nombres correctos.
+                work_type_id=eval_item.work_type_id,
+                work_type_name=eval_item.work_type.name, # Accede al nombre desde la relación JOIN
+                evaluation_weight=eval_item.evaluation_weight
+            )
+            work_types_map[eval_item.work_type_id] = work_type_detail
+            
+    # 4. Convertir el mapa de work-types a la lista final
+    work_types_list = list(work_types_map.values())
+    
+    # 5. Construir la respuesta final
+    response_data = WorkTypeDetail(
+        formative_field_id=formative_field_id,
+        formative_field_name=formative_field.name,
+        work_types=work_types_list # Ahora enviamos List[WorkTypeDetailResponse]
+    )
+    return success_response(data=response_data)

@@ -38,7 +38,7 @@ async def create_student(
             raise ConflictError(f"El CURP {student_data.curp} ya está registrado")
     
     # Crear el estudiante con el teacher_id del usuario autenticado
-    student_dict = student_data.model_dump()
+    student_dict = student_data.model_dump(exclude={"is_active"})  # Excluir is_active para usar el default de la BD
     student_dict["teacher_id"] = current_user.id
     
     new_student = Student(**student_dict)

@@ -10,9 +10,7 @@ class SchoolCycleBase(BaseModel):
     """Schema base para ciclo escolar."""
     teacher_id: int = Field(..., description="ID del profesor")
     school_id: int = Field(..., description="ID de la escuela")
-    name: str = Field(..., min_length=1, max_length=150, description="Nombre del ciclo")
-    description: Optional[str] = Field(None, description="Descripción del ciclo")
-    year: int = Field(..., ge=2000, le=3000, description="Año del ciclo")
+    name: Optional[str] = Field(None, max_length=120, description="Nombre del ciclo (ej: 'Ciclo 2024-2025 Grupo A')")
     cycle_label: Optional[str] = Field(None, max_length=50, description="Etiqueta del ciclo (ej: '2024-2025')")
     grade: Optional[str] = Field(None, max_length=20, description="Grado")
     group_name: Optional[str] = Field(None, max_length=20, description="Grupo")
@@ -29,9 +27,7 @@ class SchoolCycleUpdate(BaseModel):
     """Schema para actualizar un ciclo escolar."""
     teacher_id: Optional[int] = None
     school_id: Optional[int] = None
-    name: Optional[str] = Field(None, min_length=1, max_length=150)
-    description: Optional[str] = None
-    year: Optional[int] = Field(None, ge=2000, le=3000)
+    name: Optional[str] = Field(None, max_length=120)
     cycle_label: Optional[str] = Field(None, max_length=50)
     grade: Optional[str] = Field(None, max_length=20)
     group_name: Optional[str] = Field(None, max_length=20)

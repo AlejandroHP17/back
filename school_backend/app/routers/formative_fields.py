@@ -19,6 +19,7 @@ from app.schemas.formative_field import (
     FormativeFieldResponse
 )
 from app.schemas.formative_field_bulk import FormativeFieldBulkCreate
+from app.schemas.formative_field_detail import FormativeFieldsByCycleResponse, FormativeFieldDetail, WorkTypeDetail
 from decimal import Decimal
 from app.schemas.response import GenericResponse, success_response, created_response
 from app.dependencies import get_current_active_user
@@ -68,6 +69,71 @@ async def create_formative_field(
     
     field_response = FormativeFieldResponse.model_validate(new_field)
     return created_response(data=field_response)
+
+
+@router.get("/by-cycle/{school_cycle_id}", response_model=GenericResponse[FormativeFieldsByCycleResponse])
+async def get_formative_fields_by_cycle(
+    school_cycle_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_active_user)]
+):
+    """
+    Obtiene todos los campos formativos de un ciclo escolar con sus work-types y pesos de evaluación.
+    Retorna los campos formativos agrupados con sus work-types asociados.
+    """
+    # Verificar que el ciclo escolar existe
+    school_cycle = db.query(SchoolCycle).filter(SchoolCycle.id == school_cycle_id).first()
+    if not school_cycle:
+        raise NotFoundError("Ciclo escolar", str(school_cycle_id))
+    
+    # Obtener todos los campos formativos del ciclo escolar
+    formative_fields = db.query(FormativeField).filter(
+        FormativeField.school_cycle_id == school_cycle_id
+    ).order_by(FormativeField.name).all()
+    
+    # Construir la respuesta con work-types
+    formative_fields_detail = []
+    
+    for field in formative_fields:
+        # Obtener todas las evaluaciones de este campo formativo con sus work-types
+        evaluations = db.query(WorkTypeEvaluation).filter(
+            WorkTypeEvaluation.formative_field_id == field.id
+        ).join(WorkType).order_by(WorkType.name).all()
+        
+        # Agrupar work-types únicos (un work-type puede tener múltiples evaluaciones en diferentes parciales)
+        # Usaremos un diccionario para evitar duplicados por work_type_id
+        work_types_map = {}  # work_type_id -> WorkTypeDetail
+        
+        for eval_item in evaluations:
+            # Si el work_type ya está en el mapa, lo saltamos (mantenemos el primero encontrado)
+            # O si quieres el promedio, podrías calcularlo aquí
+            if eval_item.work_type_id not in work_types_map:
+                work_type_detail = WorkTypeDetail(
+                    work_type_id=eval_item.work_type_id,
+                    work_type_name=eval_item.work_type.name,
+                    evaluation_weight=eval_item.evaluation_weight
+                )
+                work_types_map[eval_item.work_type_id] = work_type_detail
+        
+        # Convertir el diccionario a lista
+        work_types_detail = list(work_types_map.values())
+        
+        # Crear el detalle del campo formativo
+        field_detail = FormativeFieldDetail(
+            formative_field_id=field.id,
+            name=field.name,
+            code=field.code,
+            work_types=work_types_detail
+        )
+        formative_fields_detail.append(field_detail)
+    
+    # Construir la respuesta
+    response_data = FormativeFieldsByCycleResponse(
+        school_cycle_id=school_cycle_id,
+        formative_fields=formative_fields_detail
+    )
+    
+    return success_response(data=response_data)
 
 
 @router.get("/", response_model=GenericResponse[List[FormativeFieldResponse]])

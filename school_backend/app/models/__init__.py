@@ -12,6 +12,7 @@ from app.models.catalog import (
 from app.models.catalog import School
 from app.models.user import User, AccessCode
 from app.models.device import Device
+from app.models.refresh_token import RefreshToken
 from app.models.cycle import SchoolCycle
 from app.models.student import Student
 from app.models.partial import Partial
@@ -31,6 +32,7 @@ __all__ = [
     "User",
     "AccessCode",
     "Device",
+    "RefreshToken",
     "SchoolCycle",
     "Student",
     "Partial",

@@ -29,7 +29,8 @@ class Settings(BaseSettings):
     # Configuración de seguridad JWT
     SECRET_KEY: str = "197b2c37c391bed93fe80344fe73b806947a65e36206e05a1a23c2fa12702fe3"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 horas
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 20  # 20 minutos
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 90  # 3 meses (90 días)
     
     # Configuración de CORS (puede ser un string separado por comas o "*")
     CORS_ORIGINS: str = "*"

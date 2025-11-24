@@ -47,7 +47,8 @@ def seed_catalog_data():
             {"name": "Preescolar"},
             {"name": "Primaria"},
             {"name": "Secundaria"},
-            {"name": "Bachillerato"}
+            {"name": "Bachillerato"},
+            {"name": "Universidad"}
         ]
         
         for type_data in school_types:

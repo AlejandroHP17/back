@@ -2,26 +2,77 @@
 Aplicación principal FastAPI del sistema escolar.
 """
 import logging
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 from app.config import settings
 from app.routers import auth, schools, students, cycles, control, partials, formative_fields, work_types, work_type_evaluations, attendances, student_works
 from app.schemas.response import GenericResponse, get_error_message
+from app.database import SessionLocal
+from app.security import cleanup_expired_refresh_tokens
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Crear la aplicación FastAPI
+# Scheduler para tareas programadas
+scheduler = BackgroundScheduler()
+
+
+def run_token_cleanup():
+    """
+    Ejecuta la limpieza de tokens expirados.
+    Esta función se ejecuta periódicamente mediante el scheduler.
+    """
+    db = SessionLocal()
+    try:
+        deleted_count = cleanup_expired_refresh_tokens(db)
+        if deleted_count > 0:
+            logger.info(f"Limpieza automática: Se eliminaron {deleted_count} refresh tokens expirados")
+    except Exception as e:
+        logger.error(f"Error en la limpieza automática de tokens: {str(e)}")
+    finally:
+        db.close()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Gestiona el ciclo de vida de la aplicación.
+    Inicia el scheduler al arrancar y lo detiene al cerrar.
+    """
+    # Iniciar scheduler al arrancar
+    # Ejecutar limpieza todos los días a las 2:00 AM
+    scheduler.add_job(
+        run_token_cleanup,
+        trigger=CronTrigger(hour=2, minute=0),
+        id='cleanup_expired_tokens',
+        name='Limpieza de tokens expirados',
+        replace_existing=True
+    )
+    scheduler.start()
+    logger.info("Scheduler iniciado: Limpieza automática de tokens configurada (diaria a las 2:00 AM)")
+    
+    yield
+    
+    # Detener scheduler al cerrar
+    scheduler.shutdown()
+    logger.info("Scheduler detenido")
+
+
+# Crear la aplicación FastAPI con lifespan
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     description="Backend del Sistema Escolar con FastAPI",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    lifespan=lifespan
 )
 
 # Configurar CORS
