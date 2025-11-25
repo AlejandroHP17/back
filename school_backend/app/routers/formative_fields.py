@@ -3,7 +3,7 @@ Router para gestión de campos formativos.
 """
 from typing import Annotated, List
 from fastapi import APIRouter, Depends, status, Query, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
 from app.database import get_db
 from app.models.formative_field import FormativeField
@@ -13,10 +13,12 @@ from app.models.work_type_evaluation import WorkTypeEvaluation
 from app.models.student_work import StudentWork
 from app.models.partial import Partial
 from app.models.user import User
+from app.models.catalog import School
 from app.schemas.formative_field import (
     FormativeFieldCreate,
     FormativeFieldUpdate,
-    FormativeFieldResponse
+    FormativeFieldResponse,
+    FormativeFieldCreateResponse
 )
 from app.schemas.formative_field_bulk import FormativeFieldBulkCreate
 from app.schemas.formative_field_detail import FormativeFieldsByCycleResponse, FormativeFieldDetail, WorkTypeDetail
@@ -31,7 +33,7 @@ router = APIRouter(
 )
 
 
-@router.post("/", response_model=GenericResponse[FormativeFieldResponse], status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=GenericResponse[FormativeFieldCreateResponse], status_code=status.HTTP_201_CREATED)
 async def create_formative_field(
     field_data: FormativeFieldCreate,
     db: Annotated[Session, Depends(get_db)],
@@ -67,7 +69,7 @@ async def create_formative_field(
     db.commit()
     db.refresh(new_field)
     
-    field_response = FormativeFieldResponse.model_validate(new_field)
+    field_response = FormativeFieldCreateResponse.model_validate(new_field)
     return created_response(data=field_response)
 
 
@@ -159,8 +161,27 @@ async def list_formative_fields(
     if school_cycle_id:
         query = query.filter(FormativeField.school_cycle_id == school_cycle_id)
     
-    fields = query.offset(skip).limit(limit).all()
-    fields_list = [FormativeFieldResponse.model_validate(field) for field in fields]
+    # Cargar relaciones necesarias
+    fields = query.options(
+        joinedload(FormativeField.school_cycle)
+    ).offset(skip).limit(limit).all()
+    
+    # Construir respuestas con nombres
+    fields_list = []
+    for field in fields:
+        school = field.school_cycle.school if field.school_cycle and field.school_cycle.school else None
+        
+        field_dict = {
+            "id": field.id,
+            "school_cycle_id": field.school_cycle_id,
+            "name": field.name,
+            "code": field.code,
+            "created_at": field.created_at,
+            "school_cycle_name": field.school_cycle.name if field.school_cycle else None,
+            "school_name": school.name if school else None
+        }
+        fields_list.append(FormativeFieldResponse.model_validate(field_dict))
+    
     return success_response(data=fields_list)
 
 
@@ -173,12 +194,25 @@ async def get_formative_field(
     """
     Obtiene un campo formativo por ID.
     """
-    field = db.query(FormativeField).filter(FormativeField.id == field_id).first()
+    field = db.query(FormativeField).options(
+        joinedload(FormativeField.school_cycle)
+    ).filter(FormativeField.id == field_id).first()
     
     if not field:
         raise NotFoundError("Campo formativo", str(field_id))
     
-    field_response = FormativeFieldResponse.model_validate(field)
+    school = field.school_cycle.school if field.school_cycle and field.school_cycle.school else None
+    
+    field_dict = {
+        "id": field.id,
+        "school_cycle_id": field.school_cycle_id,
+        "name": field.name,
+        "code": field.code,
+        "created_at": field.created_at,
+        "school_cycle_name": field.school_cycle.name if field.school_cycle else None,
+        "school_name": school.name if school else None
+    }
+    field_response = FormativeFieldResponse.model_validate(field_dict)
     return success_response(data=field_response)
 
 
@@ -233,7 +267,23 @@ async def update_formative_field(
     db.commit()
     db.refresh(field)
     
-    field_response = FormativeFieldResponse.model_validate(field)
+    # Recargar con relaciones
+    field = db.query(FormativeField).options(
+        joinedload(FormativeField.school_cycle)
+    ).filter(FormativeField.id == field_id).first()
+    
+    school = field.school_cycle.school if field.school_cycle and field.school_cycle.school else None
+    
+    field_dict = {
+        "id": field.id,
+        "school_cycle_id": field.school_cycle_id,
+        "name": field.name,
+        "code": field.code,
+        "created_at": field.created_at,
+        "school_cycle_name": field.school_cycle.name if field.school_cycle else None,
+        "school_name": school.name if school else None
+    }
+    field_response = FormativeFieldResponse.model_validate(field_dict)
     return success_response(data=field_response)
 
 
@@ -294,7 +344,7 @@ async def delete_formative_field(
         )
 
 
-@router.post("/bulk", response_model=GenericResponse[FormativeFieldResponse], status_code=status.HTTP_201_CREATED)
+@router.post("/bulk", response_model=GenericResponse[FormativeFieldCreateResponse], status_code=status.HTTP_201_CREATED)
 async def create_formative_field_bulk(
     bulk_data: FormativeFieldBulkCreate,
     db: Annotated[Session, Depends(get_db)],
@@ -477,6 +527,6 @@ async def create_formative_field_bulk(
     db.commit()
     db.refresh(new_field)
     
-    field_response = FormativeFieldResponse.model_validate(new_field)
+    field_response = FormativeFieldCreateResponse.model_validate(new_field)
     return created_response(data=field_response)
 

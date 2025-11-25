@@ -95,6 +95,42 @@ class StudentWorkResponse(StudentWorkBase):
     id: int
     teacher_id: int
     created_at: datetime
+    student_name: Optional[str] = Field(None, description="Nombre completo del estudiante")
+    formative_field_name: Optional[str] = Field(None, description="Nombre del campo formativo")
+    partial_name: Optional[str] = Field(None, description="Nombre del parcial")
+    work_type_name: Optional[str] = Field(None, description="Nombre del tipo de trabajo")
+    school_cycle_name: Optional[str] = Field(None, description="Nombre del ciclo escolar")
+    school_name: Optional[str] = Field(None, description="Nombre de la escuela")
+    
+    @field_validator('grade', mode='before')
+    @classmethod
+    def normalize_grade_from_db(cls, v):
+        """Normaliza la calificación cuando viene de la base de datos (ej: Decimal('10.00') -> Decimal('10.0'))."""
+        if v is not None:
+            from decimal import Decimal, ROUND_HALF_UP
+            # Asegurar que sea Decimal
+            if isinstance(v, (int, float, str)):
+                v = Decimal(str(v))
+            elif not isinstance(v, Decimal):
+                return v
+            # Redondear a máximo un decimal significativo
+            # Usamos quantize para redondear a 1 decimal
+            normalized = v.quantize(Decimal('0.1'), rounding=ROUND_HALF_UP)
+            return normalized
+        return v
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class StudentWorkCreateResponse(StudentWorkBase):
+    """Schema de respuesta para creación de trabajo de estudiante (sin school_name ni school_cycle_name)."""
+    id: int
+    teacher_id: int
+    created_at: datetime
+    student_name: Optional[str] = Field(None, description="Nombre completo del estudiante")
+    formative_field_name: Optional[str] = Field(None, description="Nombre del campo formativo")
+    partial_name: Optional[str] = Field(None, description="Nombre del parcial")
+    work_type_name: Optional[str] = Field(None, description="Nombre del tipo de trabajo")
     
     @field_validator('grade', mode='before')
     @classmethod
@@ -163,12 +199,12 @@ class StudentWorkBulkCreate(BaseModel):
 
 class StudentWorkBulkResponse(BaseModel):
     """Schema de respuesta para creación masiva de trabajos."""
-    created: List[StudentWorkResponse] = Field(..., description="Trabajos creados")
-    updated: List[StudentWorkResponse] = Field(..., description="Trabajos actualizados (si ya existían)")
+    created: List[StudentWorkCreateResponse] = Field(..., description="Trabajos creados")
     total_with_grade: int = Field(..., description="Total de estudiantes con calificación")
     total_without_grade: int = Field(..., description="Total de estudiantes sin calificación (null)")
-    formative_field_id: int = Field(..., description="ID del campo formativo usado")
-    partial_id: int = Field(..., description="ID del parcial usado")
+    formative_field_name: Optional[str] = Field(None, description="Nombre del campo formativo usado")
+    partial_name: Optional[str] = Field(None, description="Nombre del parcial usado")
     work_type_id: int = Field(..., description="ID del tipo de trabajo usado")
+    work_type_name: Optional[str] = Field(None, description="Nombre del tipo de trabajo usado")
     name: str = Field(..., description="Nombre del trabajo")
 

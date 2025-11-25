@@ -36,6 +36,16 @@ class PartialResponse(PartialBase):
     """Schema de respuesta para parcial."""
     id: int
     created_at: datetime
+    school_cycle_name: Optional[str] = Field(None, description="Nombre del ciclo escolar")
+    school_name: Optional[str] = Field(None, description="Nombre de la escuela")
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PartialCreateResponse(PartialBase):
+    """Schema de respuesta para creación de parcial (sin school_name ni school_cycle_name)."""
+    id: int
+    created_at: datetime
     
     model_config = ConfigDict(from_attributes=True)
 

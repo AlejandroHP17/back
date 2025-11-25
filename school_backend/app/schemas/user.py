@@ -49,6 +49,20 @@ class UserResponse(UserBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class UserMeResponse(BaseModel):
+    """Schema de respuesta para el endpoint /me (sin access_code_id)."""
+    id: int
+    email: EmailStr = Field(..., description="Correo electrónico del usuario")
+    first_name: Optional[str] = Field(None, max_length=100, description="Nombre")
+    last_name: Optional[str] = Field(None, max_length=100, description="Apellido")
+    phone: Optional[str] = Field(None, max_length=30, description="Teléfono")
+    access_level_id: int = Field(..., description="ID del nivel de acceso")
+    is_active: bool = Field(True, description="Estado activo/inactivo")
+    created_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
 class UserLogin(BaseModel):
     """Schema para login de usuario con validación de seguridad."""
     email: EmailStr = Field(..., description="Correo electrónico")

@@ -9,12 +9,12 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User
 from app.models.device import Device
-from app.schemas.user import UserCreate, UserRegister, UserResponse, Token, UserLogin, RefreshTokenRequest
+from app.schemas.user import UserCreate, UserRegister, UserResponse, UserMeResponse, Token, UserLogin, RefreshTokenRequest
 from app.schemas.response import GenericResponse, success_response, created_response
 from app.security import verify_password, get_password_hash, create_access_token, create_refresh_token, decode_refresh_token, validate_imei, validate_coordinates
 from app.models.refresh_token import RefreshToken
 from app.dependencies import get_current_user
-from app.exceptions import UnauthorizedError, ConflictError
+from app.exceptions import UnauthorizedError, ConflictError, InactiveUserError
 from app.config import settings
 from decimal import Decimal
 
@@ -106,7 +106,7 @@ async def login(
         raise UnauthorizedError("Credenciales inválidas")
     
     if not user.is_active:
-        raise UnauthorizedError("Usuario inactivo")
+        raise InactiveUserError("Usuario inactivo")
     
     # Validar formato del identificador del dispositivo
     if not validate_imei(login_data.imei):
@@ -264,13 +264,13 @@ async def refresh_access_token(
     return success_response(data=token_data)
 
 
-@router.get("/me", response_model=GenericResponse[UserResponse])
+@router.get("/me", response_model=GenericResponse[UserMeResponse])
 async def get_current_user_info(
     current_user: Annotated[User, Depends(get_current_user)]
 ):
     """
     Obtiene la información del usuario autenticado.
     """
-    user_response = UserResponse.model_validate(current_user)
+    user_response = UserMeResponse.model_validate(current_user)
     return success_response(data=user_response)
 

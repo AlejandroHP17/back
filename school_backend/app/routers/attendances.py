@@ -3,7 +3,7 @@ Router para gestión de asistencias.
 """
 from typing import Annotated, List
 from fastapi import APIRouter, Depends, status, Query, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, or_
 from datetime import date
 from app.database import get_db
@@ -12,10 +12,12 @@ from app.models.student import Student
 from app.models.cycle import SchoolCycle
 from app.models.partial import Partial
 from app.models.user import User
+from app.models.catalog import School
 from app.schemas.attendance import (
     AttendanceCreate,
     AttendanceUpdate,
     AttendanceResponse,
+    AttendanceCreateResponse,
     AttendanceBulkCreate,
     AttendanceBulkResponse
 )
@@ -162,12 +164,57 @@ async def create_attendances_bulk(
         for attendance in updated_attendances:
             db.refresh(attendance)
         
+        # Cargar relaciones para todos los registros (sin school_cycle)
+        all_attendance_ids = [att.id for att in created_attendances + updated_attendances]
+        attendances_with_relations = db.query(Attendance).options(
+            joinedload(Attendance.student),
+            joinedload(Attendance.partial)
+        ).filter(Attendance.id.in_(all_attendance_ids)).all()
+        
+        # Crear diccionario de asistencias por ID
+        attendances_dict = {att.id: att for att in attendances_with_relations}
+        
+        # Construir respuestas con nombres (sin school_cycle ni school)
+        created_responses = []
+        for attendance in created_attendances:
+            att_with_relations = attendances_dict.get(attendance.id)
+            if att_with_relations:
+                attendance_dict = {
+                    "id": att_with_relations.id,
+                    "student_id": att_with_relations.student_id,
+                    "partial_id": att_with_relations.partial_id,
+                    "school_cycle_id": att_with_relations.school_cycle_id,
+                    "attendance_date": att_with_relations.attendance_date,
+                    "status": att_with_relations.status,
+                    "created_at": att_with_relations.created_at,
+                    "student_name": att_with_relations.student.full_name if att_with_relations.student else None,
+                    "partial_name": att_with_relations.partial.name if att_with_relations.partial else None
+                }
+                created_responses.append(AttendanceCreateResponse.model_validate(attendance_dict))
+        
+        updated_responses = []
+        for attendance in updated_attendances:
+            att_with_relations = attendances_dict.get(attendance.id)
+            if att_with_relations:
+                attendance_dict = {
+                    "id": att_with_relations.id,
+                    "student_id": att_with_relations.student_id,
+                    "partial_id": att_with_relations.partial_id,
+                    "school_cycle_id": att_with_relations.school_cycle_id,
+                    "attendance_date": att_with_relations.attendance_date,
+                    "status": att_with_relations.status,
+                    "created_at": att_with_relations.created_at,
+                    "student_name": att_with_relations.student.full_name if att_with_relations.student else None,
+                    "partial_name": att_with_relations.partial.name if att_with_relations.partial else None
+                }
+                updated_responses.append(AttendanceCreateResponse.model_validate(attendance_dict))
+        
         total_present = len(present_student_ids)
         total_absent = len(all_students) - total_present
         
         bulk_response = AttendanceBulkResponse(
-            created=[AttendanceResponse.model_validate(att) for att in created_attendances],
-            updated=[AttendanceResponse.model_validate(att) for att in updated_attendances],
+            created=created_responses,
+            updated=updated_responses,
             total_present=total_present,
             total_absent=total_absent,
             school_cycle_id=school_cycle.id,
@@ -183,7 +230,7 @@ async def create_attendances_bulk(
         )
 
 
-@router.post("/", response_model=GenericResponse[AttendanceResponse], status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=GenericResponse[AttendanceCreateResponse], status_code=status.HTTP_201_CREATED)
 async def create_attendance(
     attendance_data: AttendanceCreate,
     db: Annotated[Session, Depends(get_db)],
@@ -256,7 +303,24 @@ async def create_attendance(
     db.commit()
     db.refresh(new_attendance)
     
-    attendance_response = AttendanceResponse.model_validate(new_attendance)
+    # Cargar relaciones para obtener nombres (sin school_cycle ni school)
+    attendance = db.query(Attendance).options(
+        joinedload(Attendance.student),
+        joinedload(Attendance.partial)
+    ).filter(Attendance.id == new_attendance.id).first()
+    
+    attendance_dict = {
+        "id": attendance.id,
+        "student_id": attendance.student_id,
+        "partial_id": attendance.partial_id,
+        "school_cycle_id": attendance.school_cycle_id,
+        "attendance_date": attendance.attendance_date,
+        "status": attendance.status,
+        "created_at": attendance.created_at,
+        "student_name": attendance.student.full_name if attendance.student else None,
+        "partial_name": attendance.partial.name if attendance.partial else None
+    }
+    attendance_response = AttendanceCreateResponse.model_validate(attendance_dict)
     return created_response(data=attendance_response)
 
 
@@ -303,8 +367,33 @@ async def list_attendances(
     if status:
         query = query.filter(Attendance.status == status)
     
-    attendances = query.offset(skip).limit(limit).all()
-    attendances_list = [AttendanceResponse.model_validate(attendance) for attendance in attendances]
+    # Cargar relaciones necesarias
+    attendances = query.options(
+        joinedload(Attendance.student),
+        joinedload(Attendance.partial),
+        joinedload(Attendance.school_cycle)
+    ).offset(skip).limit(limit).all()
+    
+    # Construir respuestas con nombres
+    attendances_list = []
+    for attendance in attendances:
+        school = attendance.school_cycle.school if attendance.school_cycle and attendance.school_cycle.school else None
+        
+        attendance_dict = {
+            "id": attendance.id,
+            "student_id": attendance.student_id,
+            "partial_id": attendance.partial_id,
+            "school_cycle_id": attendance.school_cycle_id,
+            "attendance_date": attendance.attendance_date,
+            "status": attendance.status,
+            "created_at": attendance.created_at,
+            "student_name": attendance.student.full_name if attendance.student else None,
+            "partial_name": attendance.partial.name if attendance.partial else None,
+            "school_cycle_name": attendance.school_cycle.name if attendance.school_cycle else None,
+            "school_name": school.name if school else None
+        }
+        attendances_list.append(AttendanceResponse.model_validate(attendance_dict))
+    
     return success_response(data=attendances_list)
 
 
@@ -317,12 +406,31 @@ async def get_attendance(
     """
     Obtiene un registro de asistencia por ID.
     """
-    attendance = db.query(Attendance).filter(Attendance.id == attendance_id).first()
+    attendance = db.query(Attendance).options(
+        joinedload(Attendance.student),
+        joinedload(Attendance.partial),
+        joinedload(Attendance.school_cycle)
+    ).filter(Attendance.id == attendance_id).first()
     
     if not attendance:
         raise NotFoundError("Asistencia", str(attendance_id))
     
-    attendance_response = AttendanceResponse.model_validate(attendance)
+    school = attendance.school_cycle.school if attendance.school_cycle and attendance.school_cycle.school else None
+    
+    attendance_dict = {
+        "id": attendance.id,
+        "student_id": attendance.student_id,
+        "partial_id": attendance.partial_id,
+        "school_cycle_id": attendance.school_cycle_id,
+        "attendance_date": attendance.attendance_date,
+        "status": attendance.status,
+        "created_at": attendance.created_at,
+        "student_name": attendance.student.full_name if attendance.student else None,
+        "partial_name": attendance.partial.name if attendance.partial else None,
+        "school_cycle_name": attendance.school_cycle.name if attendance.school_cycle else None,
+        "school_name": school.name if school else None
+    }
+    attendance_response = AttendanceResponse.model_validate(attendance_dict)
     return success_response(data=attendance_response)
 
 
@@ -443,7 +551,29 @@ async def update_attendance(
     db.commit()
     db.refresh(attendance)
     
-    attendance_response = AttendanceResponse.model_validate(attendance)
+    # Recargar con relaciones
+    attendance = db.query(Attendance).options(
+        joinedload(Attendance.student),
+        joinedload(Attendance.partial),
+        joinedload(Attendance.school_cycle)
+    ).filter(Attendance.id == attendance_id).first()
+    
+    school = attendance.school_cycle.school if attendance.school_cycle and attendance.school_cycle.school else None
+    
+    attendance_dict = {
+        "id": attendance.id,
+        "student_id": attendance.student_id,
+        "partial_id": attendance.partial_id,
+        "school_cycle_id": attendance.school_cycle_id,
+        "attendance_date": attendance.attendance_date,
+        "status": attendance.status,
+        "created_at": attendance.created_at,
+        "student_name": attendance.student.full_name if attendance.student else None,
+        "partial_name": attendance.partial.name if attendance.partial else None,
+        "school_cycle_name": attendance.school_cycle.name if attendance.school_cycle else None,
+        "school_name": school.name if school else None
+    }
+    attendance_response = AttendanceResponse.model_validate(attendance_dict)
     return success_response(data=attendance_response)
 
 

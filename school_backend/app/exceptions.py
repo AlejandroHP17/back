@@ -53,3 +53,11 @@ class ValidationError(SchoolBackendException):
             detail=detail
         )
 
+class InactiveUserError(SchoolBackendException):
+    """Usuario inactivo."""
+    def __init__(self, detail: str = "Usuario inactivo"):
+        super().__init__(
+            status_code=430,
+            detail=detail
+        )
+

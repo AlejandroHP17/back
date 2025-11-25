@@ -3,13 +3,14 @@ Router para gestión de estudiantes.
 """
 from typing import Annotated, List
 from fastapi import APIRouter, Depends, status, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
 from app.database import get_db
 from app.models.student import Student
 from app.models.user import User
+from app.models.catalog import School
 from app.schemas.student import (
-    StudentCreate, StudentUpdate, StudentResponse
+    StudentCreate, StudentUpdate, StudentResponse, StudentCreateResponse
 )
 from app.schemas.response import GenericResponse, success_response, created_response
 from app.dependencies import get_current_active_user
@@ -21,7 +22,7 @@ router = APIRouter(
 )
 
 
-@router.post("/", response_model=GenericResponse[StudentResponse], status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=GenericResponse[StudentCreateResponse], status_code=status.HTTP_201_CREATED)
 async def create_student(
     student_data: StudentCreate,
     db: Annotated[Session, Depends(get_db)],
@@ -46,7 +47,7 @@ async def create_student(
     db.commit()
     db.refresh(new_student)
     
-    student_response = StudentResponse.model_validate(new_student)
+    student_response = StudentCreateResponse.model_validate(new_student)
     return created_response(data=student_response)
 
 
@@ -83,8 +84,33 @@ async def list_students(
             )
         )
     
-    students = query.offset(skip).limit(limit).all()
-    students_list = [StudentResponse.model_validate(student) for student in students]
+    # Cargar relaciones necesarias
+    students = query.options(
+        joinedload(Student.school_cycle)
+    ).offset(skip).limit(limit).all()
+    
+    # Construir respuestas con nombres
+    students_list = []
+    for student in students:
+        school = student.school_cycle.school if student.school_cycle and student.school_cycle.school else None
+        
+        student_dict = {
+            "id": student.id,
+            "curp": student.curp,
+            "first_name": student.first_name,
+            "last_name": student.last_name,
+            "second_last_name": student.second_last_name,
+            "birth_date": student.birth_date,
+            "phone": student.phone,
+            "teacher_id": student.teacher_id,
+            "school_cycle_id": student.school_cycle_id,
+            "is_active": student.is_active,
+            "created_at": student.created_at,
+            "school_cycle_name": student.school_cycle.name if student.school_cycle else None,
+            "school_name": school.name if school else None
+        }
+        students_list.append(StudentResponse.model_validate(student_dict))
+    
     return success_response(data=students_list)
 
 
@@ -98,14 +124,33 @@ async def get_student(
     Obtiene un estudiante por ID.
     Solo permite acceder a estudiantes del profesor autenticado.
     """
-    student = db.query(Student).filter(
+    student = db.query(Student).options(
+        joinedload(Student.school_cycle)
+    ).filter(
         Student.id == student_id,
         Student.teacher_id == current_user.id
     ).first()
     if not student:
         raise NotFoundError("Estudiante", str(student_id))
     
-    student_response = StudentResponse.model_validate(student)
+    school = student.school_cycle.school if student.school_cycle and student.school_cycle.school else None
+    
+    student_dict = {
+        "id": student.id,
+        "curp": student.curp,
+        "first_name": student.first_name,
+        "last_name": student.last_name,
+        "second_last_name": student.second_last_name,
+        "birth_date": student.birth_date,
+        "phone": student.phone,
+        "teacher_id": student.teacher_id,
+        "school_cycle_id": student.school_cycle_id,
+        "is_active": student.is_active,
+        "created_at": student.created_at,
+        "school_cycle_name": student.school_cycle.name if student.school_cycle else None,
+        "school_name": school.name if school else None
+    }
+    student_response = StudentResponse.model_validate(student_dict)
     return success_response(data=student_response)
 
 
@@ -141,7 +186,29 @@ async def update_student(
     db.commit()
     db.refresh(student)
     
-    student_response = StudentResponse.model_validate(student)
+    # Recargar con relaciones
+    student = db.query(Student).options(
+        joinedload(Student.school_cycle)
+    ).filter(Student.id == student_id).first()
+    
+    school = student.school_cycle.school if student.school_cycle and student.school_cycle.school else None
+    
+    student_dict = {
+        "id": student.id,
+        "curp": student.curp,
+        "first_name": student.first_name,
+        "last_name": student.last_name,
+        "second_last_name": student.second_last_name,
+        "birth_date": student.birth_date,
+        "phone": student.phone,
+        "teacher_id": student.teacher_id,
+        "school_cycle_id": student.school_cycle_id,
+        "is_active": student.is_active,
+        "created_at": student.created_at,
+        "school_cycle_name": student.school_cycle.name if student.school_cycle else None,
+        "school_name": school.name if school else None
+    }
+    student_response = StudentResponse.model_validate(student_dict)
     return success_response(data=student_response)
 
 

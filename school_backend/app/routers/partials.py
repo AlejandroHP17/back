@@ -3,13 +3,14 @@ Router para gestión de parciales.
 """
 from typing import Annotated, List
 from fastapi import APIRouter, Depends, status, Query, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
 from app.database import get_db
 from app.models.partial import Partial
 from app.models.cycle import SchoolCycle
 from app.models.user import User
-from app.schemas.partial import PartialCreate, PartialCreateList, PartialUpdate, PartialResponse
+from app.models.catalog import School
+from app.schemas.partial import PartialCreate, PartialCreateList, PartialUpdate, PartialResponse, PartialCreateResponse
 from app.schemas.response import GenericResponse, success_response, created_response
 from app.dependencies import get_current_active_user
 from app.exceptions import NotFoundError, ConflictError
@@ -20,7 +21,7 @@ router = APIRouter(
 )
 
 
-@router.post("/", response_model=GenericResponse[List[PartialResponse]], status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=GenericResponse[List[PartialCreateResponse]], status_code=status.HTTP_201_CREATED)
 async def create_partials(
     partials_data: PartialCreateList,
     db: Annotated[Session, Depends(get_db)],
@@ -73,7 +74,19 @@ async def create_partials(
     for partial in created_partials:
         db.refresh(partial)
     
-    partials_list = [PartialResponse.model_validate(partial) for partial in created_partials]
+    # Construir respuestas sin nombres
+    partials_list = []
+    for partial in created_partials:
+        partial_dict = {
+            "id": partial.id,
+            "school_cycle_id": partial.school_cycle_id,
+            "name": partial.name,
+            "start_date": partial.start_date,
+            "end_date": partial.end_date,
+            "created_at": partial.created_at
+        }
+        partials_list.append(PartialCreateResponse.model_validate(partial_dict))
+    
     return created_response(data=partials_list)
 
 
@@ -100,8 +113,28 @@ async def list_partials(
     if school_cycle_id:
         query = query.filter(Partial.school_cycle_id == school_cycle_id)
     
-    partials = query.offset(skip).limit(limit).all()
-    partials_list = [PartialResponse.model_validate(partial) for partial in partials]
+    # Cargar relaciones necesarias
+    partials = query.options(
+        joinedload(Partial.school_cycle)
+    ).offset(skip).limit(limit).all()
+    
+    # Construir respuestas con nombres
+    partials_list = []
+    for partial in partials:
+        school = partial.school_cycle.school if partial.school_cycle and partial.school_cycle.school else None
+        
+        partial_dict = {
+            "id": partial.id,
+            "school_cycle_id": partial.school_cycle_id,
+            "name": partial.name,
+            "start_date": partial.start_date,
+            "end_date": partial.end_date,
+            "created_at": partial.created_at,
+            "school_cycle_name": partial.school_cycle.name if partial.school_cycle else None,
+            "school_name": school.name if school else None
+        }
+        partials_list.append(PartialResponse.model_validate(partial_dict))
+    
     return success_response(data=partials_list)
 
 
@@ -114,12 +147,26 @@ async def get_partial(
     """
     Obtiene un parcial por ID.
     """
-    partial = db.query(Partial).filter(Partial.id == partial_id).first()
+    partial = db.query(Partial).options(
+        joinedload(Partial.school_cycle)
+    ).filter(Partial.id == partial_id).first()
     
     if not partial:
         raise NotFoundError("Parcial", str(partial_id))
     
-    partial_response = PartialResponse.model_validate(partial)
+    school = partial.school_cycle.school if partial.school_cycle and partial.school_cycle.school else None
+    
+    partial_dict = {
+        "id": partial.id,
+        "school_cycle_id": partial.school_cycle_id,
+        "name": partial.name,
+        "start_date": partial.start_date,
+        "end_date": partial.end_date,
+        "created_at": partial.created_at,
+        "school_cycle_name": partial.school_cycle.name if partial.school_cycle else None,
+        "school_name": school.name if school else None
+    }
+    partial_response = PartialResponse.model_validate(partial_dict)
     return success_response(data=partial_response)
 
 
@@ -174,7 +221,24 @@ async def update_partial(
     db.commit()
     db.refresh(partial)
     
-    partial_response = PartialResponse.model_validate(partial)
+    # Recargar con relaciones
+    partial = db.query(Partial).options(
+        joinedload(Partial.school_cycle)
+    ).filter(Partial.id == partial_id).first()
+    
+    school = partial.school_cycle.school if partial.school_cycle and partial.school_cycle.school else None
+    
+    partial_dict = {
+        "id": partial.id,
+        "school_cycle_id": partial.school_cycle_id,
+        "name": partial.name,
+        "start_date": partial.start_date,
+        "end_date": partial.end_date,
+        "created_at": partial.created_at,
+        "school_cycle_name": partial.school_cycle.name if partial.school_cycle else None,
+        "school_name": school.name if school else None
+    }
+    partial_response = PartialResponse.model_validate(partial_dict)
     return success_response(data=partial_response)
 
 

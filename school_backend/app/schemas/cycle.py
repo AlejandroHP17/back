@@ -39,6 +39,17 @@ class SchoolCycleResponse(SchoolCycleBase):
     """Schema de respuesta para ciclo escolar."""
     id: int
     created_at: datetime
+    school_name: Optional[str] = Field(None, description="Nombre de la escuela")
+    teacher_name: Optional[str] = Field(None, description="Nombre completo del profesor")
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SchoolCycleCreateResponse(SchoolCycleBase):
+    """Schema de respuesta para creación de ciclo escolar (sin school_name ni school_cycle_name)."""
+    id: int
+    created_at: datetime
+    teacher_name: Optional[str] = Field(None, description="Nombre completo del profesor")
     
     model_config = ConfigDict(from_attributes=True)
 

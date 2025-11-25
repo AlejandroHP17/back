@@ -3,7 +3,7 @@ Router para gestión de trabajos de estudiantes.
 """
 from typing import Annotated, List
 from fastapi import APIRouter, Depends, status, Query, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, or_
 from datetime import date
 from app.database import get_db
@@ -14,10 +14,12 @@ from app.models.partial import Partial
 from app.models.formative_field import FormativeField
 from app.models.work_type import WorkType
 from app.models.user import User
+from app.models.catalog import School
 from app.schemas.student_work import (
     StudentWorkCreate,
     StudentWorkUpdate,
     StudentWorkResponse,
+    StudentWorkCreateResponse,
     StudentWorkBulkCreate,
     StudentWorkBulkResponse
 )
@@ -165,18 +167,53 @@ async def create_student_works_bulk(
         for work in updated_works:
             db.refresh(work)
         
-        # Contar estudiantes con y sin calificación
-        total_with_grade = sum(1 for work in created_works + updated_works if work.grade is not None)
-        total_without_grade = len(created_works + updated_works) - total_with_grade
+        # Cargar relaciones para todos los trabajos
+        all_work_ids = [w.id for w in created_works + updated_works]
+        works_with_relations = db.query(StudentWork).options(
+            joinedload(StudentWork.student),
+            joinedload(StudentWork.formative_field),
+            joinedload(StudentWork.partial),
+            joinedload(StudentWork.work_type)
+        ).filter(StudentWork.id.in_(all_work_ids)).all()
+        
+        # Crear diccionario de trabajos por ID
+        works_dict = {w.id: w for w in works_with_relations}
+        
+        # Construir respuestas con nombres (sin school_cycle ni school) - solo para los creados
+        created_responses = []
+        for work in created_works:
+            work_with_relations = works_dict.get(work.id)
+            if work_with_relations:
+                work_dict = {
+                    "id": work_with_relations.id,
+                    "student_id": work_with_relations.student_id,
+                    "formative_field_id": work_with_relations.formative_field_id,
+                    "partial_id": work_with_relations.partial_id,
+                    "work_type_id": work_with_relations.work_type_id,
+                    "name": work_with_relations.name,
+                    "grade": work_with_relations.grade,
+                    "work_date": work_with_relations.work_date,
+                    "teacher_id": work_with_relations.teacher_id,
+                    "created_at": work_with_relations.created_at,
+                    "student_name": work_with_relations.student.full_name if work_with_relations.student else None,
+                    "formative_field_name": work_with_relations.formative_field.name if work_with_relations.formative_field else None,
+                    "partial_name": work_with_relations.partial.name if work_with_relations.partial else None,
+                    "work_type_name": work_with_relations.work_type.name if work_with_relations.work_type else None
+                }
+                created_responses.append(StudentWorkCreateResponse.model_validate(work_dict))
+        
+        # Contar estudiantes con y sin calificación (solo de los creados)
+        total_with_grade = sum(1 for work in created_works if work.grade is not None)
+        total_without_grade = len(created_works) - total_with_grade
         
         bulk_response = StudentWorkBulkResponse(
-            created=[StudentWorkResponse.model_validate(work) for work in created_works],
-            updated=[StudentWorkResponse.model_validate(work) for work in updated_works],
+            created=created_responses,
             total_with_grade=total_with_grade,
             total_without_grade=total_without_grade,
-            formative_field_id=bulk_data.formative_field_id,
-            partial_id=bulk_data.partial_id,
+            formative_field_name=formative_field.name if formative_field else None,
+            partial_name=partial.name if partial else None,
             work_type_id=bulk_data.work_type_id,
+            work_type_name=work_type.name if work_type else None,
             name=bulk_data.name
         )
         return created_response(data=bulk_response)
@@ -189,7 +226,7 @@ async def create_student_works_bulk(
         )
 
 
-@router.post("/", response_model=GenericResponse[StudentWorkResponse], status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=GenericResponse[StudentWorkCreateResponse], status_code=status.HTTP_201_CREATED)
 async def create_student_work(
     work_data: StudentWorkCreate,
     db: Annotated[Session, Depends(get_db)],
@@ -261,7 +298,31 @@ async def create_student_work(
     db.commit()
     db.refresh(new_work)
     
-    work_response = StudentWorkResponse.model_validate(new_work)
+    # Cargar relaciones para obtener nombres (sin school_cycle ni school)
+    work = db.query(StudentWork).options(
+        joinedload(StudentWork.student),
+        joinedload(StudentWork.formative_field),
+        joinedload(StudentWork.partial),
+        joinedload(StudentWork.work_type)
+    ).filter(StudentWork.id == new_work.id).first()
+    
+    work_dict = {
+        "id": work.id,
+        "student_id": work.student_id,
+        "formative_field_id": work.formative_field_id,
+        "partial_id": work.partial_id,
+        "work_type_id": work.work_type_id,
+        "name": work.name,
+        "grade": work.grade,
+        "work_date": work.work_date,
+        "teacher_id": work.teacher_id,
+        "created_at": work.created_at,
+        "student_name": work.student.full_name if work.student else None,
+        "formative_field_name": work.formative_field.name if work.formative_field else None,
+        "partial_name": work.partial.name if work.partial else None,
+        "work_type_name": work.work_type.name if work.work_type else None
+    }
+    work_response = StudentWorkCreateResponse.model_validate(work_dict)
     return created_response(data=work_response)
 
 
@@ -307,8 +368,45 @@ async def list_student_works(
     if work_type_id:
         query = query.filter(StudentWork.work_type_id == work_type_id)
     
-    works = query.offset(skip).limit(limit).all()
-    works_list = [StudentWorkResponse.model_validate(work) for work in works]
+    # Cargar relaciones necesarias
+    works = query.options(
+        joinedload(StudentWork.student),
+        joinedload(StudentWork.formative_field),
+        joinedload(StudentWork.partial),
+        joinedload(StudentWork.work_type)
+    ).offset(skip).limit(limit).all()
+    
+    # Construir respuestas con nombres
+    works_list = []
+    for work in works:
+        # Cargar ciclo escolar y escuela si es necesario
+        if work.student and work.student.school_cycle:
+            school_cycle = work.student.school_cycle
+            school = school_cycle.school if school_cycle.school else None
+        else:
+            school_cycle = None
+            school = None
+        
+        work_dict = {
+            "id": work.id,
+            "student_id": work.student_id,
+            "formative_field_id": work.formative_field_id,
+            "partial_id": work.partial_id,
+            "work_type_id": work.work_type_id,
+            "name": work.name,
+            "grade": work.grade,
+            "work_date": work.work_date,
+            "teacher_id": work.teacher_id,
+            "created_at": work.created_at,
+            "student_name": work.student.full_name if work.student else None,
+            "formative_field_name": work.formative_field.name if work.formative_field else None,
+            "partial_name": work.partial.name if work.partial else None,
+            "work_type_name": work.work_type.name if work.work_type else None,
+            "school_cycle_name": school_cycle.name if school_cycle else None,
+            "school_name": school.name if school else None
+        }
+        works_list.append(StudentWorkResponse.model_validate(work_dict))
+    
     return success_response(data=works_list)
 
 
@@ -321,12 +419,43 @@ async def get_student_work(
     """
     Obtiene un trabajo de estudiante por ID.
     """
-    work = db.query(StudentWork).filter(StudentWork.id == work_id).first()
+    work = db.query(StudentWork).options(
+        joinedload(StudentWork.student),
+        joinedload(StudentWork.formative_field),
+        joinedload(StudentWork.partial),
+        joinedload(StudentWork.work_type)
+    ).filter(StudentWork.id == work_id).first()
     
     if not work:
         raise NotFoundError("Trabajo de estudiante", str(work_id))
     
-    work_response = StudentWorkResponse.model_validate(work)
+    # Cargar ciclo escolar y escuela
+    if work.student and work.student.school_cycle:
+        school_cycle = work.student.school_cycle
+        school = school_cycle.school if school_cycle.school else None
+    else:
+        school_cycle = None
+        school = None
+    
+    work_dict = {
+        "id": work.id,
+        "student_id": work.student_id,
+        "formative_field_id": work.formative_field_id,
+        "partial_id": work.partial_id,
+        "work_type_id": work.work_type_id,
+        "name": work.name,
+        "grade": work.grade,
+        "work_date": work.work_date,
+        "teacher_id": work.teacher_id,
+        "created_at": work.created_at,
+        "student_name": work.student.full_name if work.student else None,
+        "formative_field_name": work.formative_field.name if work.formative_field else None,
+        "partial_name": work.partial.name if work.partial else None,
+        "work_type_name": work.work_type.name if work.work_type else None,
+        "school_cycle_name": school_cycle.name if school_cycle else None,
+        "school_name": school.name if school else None
+    }
+    work_response = StudentWorkResponse.model_validate(work_dict)
     return success_response(data=work_response)
 
 
@@ -391,7 +520,41 @@ async def update_student_work(
     db.commit()
     db.refresh(work)
     
-    work_response = StudentWorkResponse.model_validate(work)
+    # Recargar con relaciones
+    work = db.query(StudentWork).options(
+        joinedload(StudentWork.student),
+        joinedload(StudentWork.formative_field),
+        joinedload(StudentWork.partial),
+        joinedload(StudentWork.work_type)
+    ).filter(StudentWork.id == work_id).first()
+    
+    # Cargar ciclo escolar y escuela
+    if work.student and work.student.school_cycle:
+        school_cycle = work.student.school_cycle
+        school = school_cycle.school if school_cycle.school else None
+    else:
+        school_cycle = None
+        school = None
+    
+    work_dict = {
+        "id": work.id,
+        "student_id": work.student_id,
+        "formative_field_id": work.formative_field_id,
+        "partial_id": work.partial_id,
+        "work_type_id": work.work_type_id,
+        "name": work.name,
+        "grade": work.grade,
+        "work_date": work.work_date,
+        "teacher_id": work.teacher_id,
+        "created_at": work.created_at,
+        "student_name": work.student.full_name if work.student else None,
+        "formative_field_name": work.formative_field.name if work.formative_field else None,
+        "partial_name": work.partial.name if work.partial else None,
+        "work_type_name": work.work_type.name if work.work_type else None,
+        "school_cycle_name": school_cycle.name if school_cycle else None,
+        "school_name": school.name if school else None
+    }
+    work_response = StudentWorkResponse.model_validate(work_dict)
     return success_response(data=work_response)
 
 

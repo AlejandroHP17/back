@@ -41,6 +41,16 @@ class StudentResponse(StudentBase):
     """Schema de respuesta para estudiante."""
     id: int
     created_at: datetime
+    school_cycle_name: Optional[str] = Field(None, description="Nombre del ciclo escolar")
+    school_name: Optional[str] = Field(None, description="Nombre de la escuela")
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class StudentCreateResponse(StudentBase):
+    """Schema de respuesta para creación de estudiante (sin school_name ni school_cycle_name)."""
+    id: int
+    created_at: datetime
     
     model_config = ConfigDict(from_attributes=True)
 

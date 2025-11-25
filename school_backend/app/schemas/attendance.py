@@ -33,6 +33,20 @@ class AttendanceResponse(AttendanceBase):
     """Schema de respuesta para asistencia."""
     id: int
     created_at: datetime
+    student_name: Optional[str] = Field(None, description="Nombre completo del estudiante")
+    partial_name: Optional[str] = Field(None, description="Nombre del parcial")
+    school_cycle_name: Optional[str] = Field(None, description="Nombre del ciclo escolar")
+    school_name: Optional[str] = Field(None, description="Nombre de la escuela")
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AttendanceCreateResponse(AttendanceBase):
+    """Schema de respuesta para creación de asistencia (sin school_name ni school_cycle_name)."""
+    id: int
+    created_at: datetime
+    student_name: Optional[str] = Field(None, description="Nombre completo del estudiante")
+    partial_name: Optional[str] = Field(None, description="Nombre del parcial")
     
     model_config = ConfigDict(from_attributes=True)
 
@@ -47,8 +61,8 @@ class AttendanceBulkCreate(BaseModel):
 
 class AttendanceBulkResponse(BaseModel):
     """Schema de respuesta para creación masiva de asistencias."""
-    created: List[AttendanceResponse] = Field(..., description="Asistencias creadas")
-    updated: List[AttendanceResponse] = Field(..., description="Asistencias actualizadas (si ya existían)")
+    created: List[AttendanceCreateResponse] = Field(..., description="Asistencias creadas")
+    updated: List[AttendanceCreateResponse] = Field(..., description="Asistencias actualizadas (si ya existían)")
     total_present: int = Field(..., description="Total de estudiantes presentes")
     total_absent: int = Field(..., description="Total de estudiantes ausentes")
     school_cycle_id: int = Field(..., description="ID del ciclo escolar usado")
