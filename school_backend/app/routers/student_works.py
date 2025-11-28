@@ -22,7 +22,10 @@ from app.schemas.student_work import (
     StudentWorkCreateResponse,
     StudentWorkBulkCreate,
     StudentWorkBulkResponse,
-    StudentWorkListResponse
+    StudentWorkListResponse,
+    FormativeFieldGroupResponse,
+    WorkTypeGroup,
+    StudentWorkItem
 )
 from app.schemas.response import GenericResponse, success_response, created_response
 from app.dependencies import get_current_active_user
@@ -338,10 +341,14 @@ async def list_student_works(
     partial_id: int = Query(None, description="Filtrar por ID de parcial"),
     work_type_id: int = Query(None, description="Filtrar por ID de tipo de trabajo"),
     school_cycle_id: int = Query(None, description="Filtrar por ID de ciclo escolar"),
-    teacher_id: int = Query(None, description="Filtrar por ID de profesor")
+    teacher_id: int = Query(None, description="Filtrar por ID de profesor"),
+    work_date: date = Query(None, description="Filtrar por fecha específica del trabajo"),
+    work_date_from: date = Query(None, description="Filtrar trabajos desde esta fecha (inclusive)"),
+    work_date_to: date = Query(None, description="Filtrar trabajos hasta esta fecha (inclusive)")
 ):
     """
     Lista todos los trabajos de estudiantes con filtros y paginación.
+    Permite filtrar por fecha específica o por rango de fechas.
     """
     query = db.query(StudentWork)
     
@@ -368,6 +375,17 @@ async def list_student_works(
     # Si se especifica work_type_id, filtrar por tipo de trabajo
     if work_type_id:
         query = query.filter(StudentWork.work_type_id == work_type_id)
+    
+    # Filtros por fecha
+    if work_date:
+        # Filtrar por fecha específica
+        query = query.filter(StudentWork.work_date == work_date)
+    else:
+        # Filtrar por rango de fechas si se proporciona
+        if work_date_from:
+            query = query.filter(StudentWork.work_date >= work_date_from)
+        if work_date_to:
+            query = query.filter(StudentWork.work_date <= work_date_to)
     
     # Cargar relaciones necesarias
     works = query.options(
@@ -396,6 +414,91 @@ async def list_student_works(
         works_list.append(StudentWorkListResponse.model_validate(work_dict))
     
     return success_response(data=works_list)
+
+
+@router.get("/grouped", response_model=GenericResponse[FormativeFieldGroupResponse])
+async def get_student_works_grouped(
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    formative_field_id: int = Query(..., description="ID del campo formativo para agrupar trabajos")
+):
+    """
+    Obtiene los trabajos de estudiantes agrupados por campo formativo y tipo de trabajo.
+    """
+    # Verificar que el campo formativo existe
+    formative_field = db.query(FormativeField).filter(
+        FormativeField.id == formative_field_id
+    ).first()
+    if not formative_field:
+        raise NotFoundError("Campo formativo", str(formative_field_id))
+    
+    # Obtener todos los trabajos de estudiantes para este campo formativo
+    works = db.query(StudentWork).options(
+        joinedload(StudentWork.work_type)
+    ).filter(
+        StudentWork.formative_field_id == formative_field_id
+    ).all()
+    
+    # Agrupar por work_type_id
+    works_by_type = {}
+    for work in works:
+        work_type_id = work.work_type_id
+        if work_type_id not in works_by_type:
+            work_type = work.work_type
+            works_by_type[work_type_id] = {
+                "id": work_type.id,
+                "name": work_type.name,
+                "works": [],
+                "seen": set()  # Para rastrear trabajos únicos por nombre y fecha
+            }
+        
+        # Crear una clave única basada en nombre y fecha
+        work_key = (work.name, work.work_date)
+        
+        # Solo agregar si no se ha visto antes (mismo nombre y fecha)
+        if work_key not in works_by_type[work_type_id]["seen"]:
+            works_by_type[work_type_id]["seen"].add(work_key)
+            works_by_type[work_type_id]["works"].append({
+                "id": work.id,
+                "name": work.name,
+                "work_date": work.work_date
+            })
+    
+    # Construir la lista de tipos de trabajo
+    list_of_works = []
+    for work_type_id, work_type_data in works_by_type.items():
+        # Ordenar los trabajos por fecha (más recientes primero) o por ID si no hay fecha
+        sorted_works = sorted(
+            work_type_data["works"],
+            key=lambda x: (x["work_date"] if x["work_date"] else date.min, x["id"]),
+            reverse=True
+        )
+        
+        work_type_group = WorkTypeGroup(
+            id=work_type_data["id"],
+            name=work_type_data["name"],
+            list_of_work_student=[
+                StudentWorkItem(
+                    id=w["id"],
+                    name=w["name"],
+                    work_date=w["work_date"]
+                )
+                for w in sorted_works
+            ]
+        )
+        list_of_works.append(work_type_group)
+    
+    # Ordenar los tipos de trabajo por ID
+    list_of_works.sort(key=lambda x: x.id)
+    
+    # Construir la respuesta
+    response = FormativeFieldGroupResponse(
+        formative_field_id=formative_field.id,
+        name_formative_field=formative_field.name,
+        list_of_works=list_of_works
+    )
+    
+    return success_response(data=response)
 
 
 @router.get("/{work_id}", response_model=GenericResponse[StudentWorkResponse])

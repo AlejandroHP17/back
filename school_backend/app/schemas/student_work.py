@@ -242,3 +242,30 @@ class StudentWorkBulkResponse(BaseModel):
     work_type_name: Optional[str] = Field(None, description="Nombre del tipo de trabajo usado")
     name: str = Field(..., description="Nombre del trabajo")
 
+
+class StudentWorkItem(BaseModel):
+    """Schema para un trabajo de estudiante en la respuesta agrupada."""
+    id: int = Field(..., description="ID del trabajo de estudiante")
+    name: str = Field(..., description="Nombre del trabajo")
+    work_date: Optional[date] = Field(None, description="Fecha del trabajo")
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class WorkTypeGroup(BaseModel):
+    """Schema para agrupar trabajos por tipo de trabajo."""
+    id: int = Field(..., description="ID del tipo de trabajo")
+    name: str = Field(..., description="Nombre del tipo de trabajo")
+    list_of_work_student: List[StudentWorkItem] = Field(..., description="Lista de trabajos de estudiantes")
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FormativeFieldGroupResponse(BaseModel):
+    """Schema de respuesta agrupada por campo formativo y tipo de trabajo."""
+    formative_field_id: int = Field(..., description="ID del campo formativo")
+    name_formative_field: str = Field(..., description="Nombre del campo formativo")
+    list_of_works: List[WorkTypeGroup] = Field(..., description="Lista de tipos de trabajo con sus trabajos")
+    
+    model_config = ConfigDict(from_attributes=True)
+
