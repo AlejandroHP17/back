@@ -152,6 +152,40 @@ class StudentWorkCreateResponse(StudentWorkBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class StudentWorkListResponse(BaseModel):
+    """Schema de respuesta para listado de trabajos de estudiante (sin teacher_id, partial_id, partial_name, school_cycle_name, school_name)."""
+    id: int
+    student_id: int = Field(..., description="ID del estudiante")
+    formative_field_id: int = Field(..., description="ID del campo formativo")
+    work_type_id: int = Field(..., description="ID del tipo de trabajo")
+    name: str = Field(..., min_length=1, max_length=100, description="Nombre del trabajo")
+    grade: Optional[Decimal] = Field(default=None, description="Calificación (0.0 a 10.0, máximo un decimal)")
+    work_date: Optional[date] = Field(default=None, description="Fecha del trabajo")
+    created_at: datetime
+    student_name: Optional[str] = Field(None, description="Nombre completo del estudiante")
+    formative_field_name: Optional[str] = Field(None, description="Nombre del campo formativo")
+    work_type_name: Optional[str] = Field(None, description="Nombre del tipo de trabajo")
+    
+    @field_validator('grade', mode='before')
+    @classmethod
+    def normalize_grade_from_db(cls, v):
+        """Normaliza la calificación cuando viene de la base de datos (ej: Decimal('10.00') -> Decimal('10.0'))."""
+        if v is not None:
+            from decimal import Decimal, ROUND_HALF_UP
+            # Asegurar que sea Decimal
+            if isinstance(v, (int, float, str)):
+                v = Decimal(str(v))
+            elif not isinstance(v, Decimal):
+                return v
+            # Redondear a máximo un decimal significativo
+            # Usamos quantize para redondear a 1 decimal
+            normalized = v.quantize(Decimal('0.1'), rounding=ROUND_HALF_UP)
+            return normalized
+        return v
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
 class StudentWorkGradeItem(BaseModel):
     """Schema para un elemento de calificación en el bulk."""
     student_id: int = Field(..., description="ID del estudiante")

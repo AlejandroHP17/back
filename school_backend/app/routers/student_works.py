@@ -21,7 +21,8 @@ from app.schemas.student_work import (
     StudentWorkResponse,
     StudentWorkCreateResponse,
     StudentWorkBulkCreate,
-    StudentWorkBulkResponse
+    StudentWorkBulkResponse,
+    StudentWorkListResponse
 )
 from app.schemas.response import GenericResponse, success_response, created_response
 from app.dependencies import get_current_active_user
@@ -326,7 +327,7 @@ async def create_student_work(
     return created_response(data=work_response)
 
 
-@router.get("/", response_model=GenericResponse[List[StudentWorkResponse]])
+@router.get("/", response_model=GenericResponse[List[StudentWorkListResponse]])
 async def list_student_works(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_active_user)],
@@ -376,36 +377,23 @@ async def list_student_works(
         joinedload(StudentWork.work_type)
     ).offset(skip).limit(limit).all()
     
-    # Construir respuestas con nombres
+    # Construir respuestas con nombres (sin teacher_id, partial_id, partial_name, school_cycle_name, school_name)
     works_list = []
     for work in works:
-        # Cargar ciclo escolar y escuela si es necesario
-        if work.student and work.student.school_cycle:
-            school_cycle = work.student.school_cycle
-            school = school_cycle.school if school_cycle.school else None
-        else:
-            school_cycle = None
-            school = None
-        
         work_dict = {
             "id": work.id,
             "student_id": work.student_id,
             "formative_field_id": work.formative_field_id,
-            "partial_id": work.partial_id,
             "work_type_id": work.work_type_id,
             "name": work.name,
             "grade": work.grade,
             "work_date": work.work_date,
-            "teacher_id": work.teacher_id,
             "created_at": work.created_at,
             "student_name": work.student.full_name if work.student else None,
             "formative_field_name": work.formative_field.name if work.formative_field else None,
-            "partial_name": work.partial.name if work.partial else None,
-            "work_type_name": work.work_type.name if work.work_type else None,
-            "school_cycle_name": school_cycle.name if school_cycle else None,
-            "school_name": school.name if school else None
+            "work_type_name": work.work_type.name if work.work_type else None
         }
-        works_list.append(StudentWorkResponse.model_validate(work_dict))
+        works_list.append(StudentWorkListResponse.model_validate(work_dict))
     
     return success_response(data=works_list)
 
