@@ -4,7 +4,7 @@ Router para gestión de trabajos de estudiantes.
 from typing import Annotated, List
 from fastapi import APIRouter, Depends, status, Query, HTTPException
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, func
 from datetime import date
 from app.database import get_db
 from app.models.student_work import StudentWork
@@ -25,7 +25,10 @@ from app.schemas.student_work import (
     StudentWorkListResponse,
     FormativeFieldGroupResponse,
     WorkTypeGroup,
-    StudentWorkItem
+    StudentWorkItem,
+    FieldTypeStudentsResponse,
+    WorkWithStudents,
+    StudentWithGrade
 )
 from app.schemas.response import GenericResponse, success_response, created_response
 from app.dependencies import get_current_active_user
@@ -496,6 +499,210 @@ async def get_student_works_grouped(
         formative_field_id=formative_field.id,
         name_formative_field=formative_field.name,
         list_of_works=list_of_works
+    )
+    
+    return success_response(data=response)
+
+
+@router.get("/by-student-field-type", response_model=GenericResponse[List[StudentWorkListResponse]])
+async def get_student_works_by_student_field_type(
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    student_id: int = Query(..., description="ID del estudiante"),
+    formative_field_id: int = Query(..., description="ID del campo formativo"),
+    work_type_id: int = Query(..., description="ID del tipo de trabajo"),
+    partial_id: int = Query(None, description="ID del parcial (opcional)"),
+    work_name: str = Query(None, description="Filtrar por nombre del trabajo (opcional)"),
+    work_date: date = Query(None, description="Filtrar por fecha del trabajo (opcional)")
+):
+    """
+    Flujo 1 optimizado: Obtiene trabajos de un estudiante específico filtrados por campo formativo y tipo de trabajo.
+    Optimizado para consultas rápidas con índices compuestos.
+    """
+    # Verificar que el estudiante existe
+    student = db.query(Student).filter(Student.id == student_id).first()
+    if not student:
+        raise NotFoundError("Estudiante", str(student_id))
+    
+    # Verificar que el campo formativo existe
+    formative_field = db.query(FormativeField).filter(
+        FormativeField.id == formative_field_id
+    ).first()
+    if not formative_field:
+        raise NotFoundError("Campo formativo", str(formative_field_id))
+    
+    # Verificar que el tipo de trabajo existe
+    work_type = db.query(WorkType).filter(WorkType.id == work_type_id).first()
+    if not work_type:
+        raise NotFoundError("Tipo de trabajo", str(work_type_id))
+    
+    # Verificar que pertenecen al mismo ciclo escolar
+    if student.school_cycle_id != formative_field.school_cycle_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El estudiante y el campo formativo deben pertenecer al mismo ciclo escolar."
+        )
+    
+    # Construir la consulta optimizada con filtros específicos
+    query = db.query(StudentWork).filter(
+        and_(
+            StudentWork.student_id == student_id,
+            StudentWork.formative_field_id == formative_field_id,
+            StudentWork.work_type_id == work_type_id
+        )
+    )
+    
+    # Filtros opcionales
+    if partial_id:
+        query = query.filter(StudentWork.partial_id == partial_id)
+    
+    if work_name:
+        query = query.filter(StudentWork.name == work_name)
+    
+    if work_date:
+        query = query.filter(StudentWork.work_date == work_date)
+    
+    # Cargar relaciones necesarias
+    # Usar func.isnull() para MySQL (ISNULL devuelve 1 si es NULL, 0 si no)
+    # Esto pone los NULLs al final al ordenar
+    works = query.options(
+        joinedload(StudentWork.student),
+        joinedload(StudentWork.formative_field),
+        joinedload(StudentWork.work_type)
+    ).order_by(func.isnull(StudentWork.work_date), StudentWork.work_date.desc(), StudentWork.created_at.desc()).all()
+    
+    # Construir respuestas
+    works_list = []
+    for work in works:
+        work_dict = {
+            "id": work.id,
+            "student_id": work.student_id,
+            "formative_field_id": work.formative_field_id,
+            "work_type_id": work.work_type_id,
+            "name": work.name,
+            "grade": work.grade,
+            "work_date": work.work_date,
+            "created_at": work.created_at,
+            "student_name": work.student.full_name if work.student else None,
+            "formative_field_name": work.formative_field.name if work.formative_field else None,
+            "work_type_name": work.work_type.name if work.work_type else None
+        }
+        works_list.append(StudentWorkListResponse.model_validate(work_dict))
+    
+    return success_response(data=works_list)
+
+
+@router.get("/by-field-type-students", response_model=GenericResponse[FieldTypeStudentsResponse])
+async def get_works_by_field_type_with_students(
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    formative_field_id: int = Query(..., description="ID del campo formativo"),
+    work_type_id: int = Query(..., description="ID del tipo de trabajo"),
+    partial_id: int = Query(None, description="ID del parcial (opcional)"),
+    work_name: str = Query(None, description="Filtrar por nombre del trabajo (opcional)"),
+    work_date: date = Query(None, description="Filtrar por fecha del trabajo (opcional)")
+):
+    """
+    Flujo 2: Obtiene trabajos únicos agrupados por campo formativo y tipo de trabajo,
+    con la lista de estudiantes que tienen cada trabajo registrado y sus calificaciones.
+    """
+    # Verificar que el campo formativo existe
+    formative_field = db.query(FormativeField).filter(
+        FormativeField.id == formative_field_id
+    ).first()
+    if not formative_field:
+        raise NotFoundError("Campo formativo", str(formative_field_id))
+    
+    # Verificar que el tipo de trabajo existe
+    work_type = db.query(WorkType).filter(WorkType.id == work_type_id).first()
+    if not work_type:
+        raise NotFoundError("Tipo de trabajo", str(work_type_id))
+    
+    # Construir la consulta base
+    query = db.query(StudentWork).filter(
+        and_(
+            StudentWork.formative_field_id == formative_field_id,
+            StudentWork.work_type_id == work_type_id
+        )
+    )
+    
+    # Filtros opcionales
+    if partial_id:
+        query = query.filter(StudentWork.partial_id == partial_id)
+    
+    if work_name:
+        query = query.filter(StudentWork.name == work_name)
+    
+    if work_date:
+        query = query.filter(StudentWork.work_date == work_date)
+    
+    # Cargar relaciones necesarias
+    # Usar func.isnull() para MySQL (ISNULL devuelve 1 si es NULL, 0 si no)
+    # Esto pone los NULLs al final al ordenar
+    works = query.options(
+        joinedload(StudentWork.student),
+        joinedload(StudentWork.formative_field),
+        joinedload(StudentWork.work_type)
+    ).order_by(func.isnull(StudentWork.work_date), StudentWork.work_date.desc(), StudentWork.name, StudentWork.created_at).all()
+    
+    # Agrupar trabajos únicos por nombre y fecha
+    works_by_key = {}
+    for work in works:
+        # Clave única: (nombre, fecha)
+        work_key = (work.name, work.work_date)
+        
+        if work_key not in works_by_key:
+            works_by_key[work_key] = {
+                "id": work.id,  # ID representativo (el primero encontrado)
+                "name": work.name,
+                "work_date": work.work_date,
+                "students": []
+            }
+        
+        # Agregar estudiante con su calificación
+        student_data = {
+            "student_id": work.student_id,
+            "student_name": work.student.full_name if work.student else "Desconocido",
+            "grade": work.grade
+        }
+        works_by_key[work_key]["students"].append(student_data)
+    
+    # Construir la lista de trabajos con estudiantes
+    works_list = []
+    for work_key, work_data in works_by_key.items():
+        # Ordenar estudiantes por nombre
+        work_data["students"].sort(key=lambda x: x["student_name"])
+        
+        # Crear lista de StudentWithGrade
+        students_list = [
+            StudentWithGrade(
+                student_id=s["student_id"],
+                student_name=s["student_name"],
+                grade=s["grade"]
+            )
+            for s in work_data["students"]
+        ]
+        
+        works_list.append(WorkWithStudents(
+            id=work_data["id"],
+            name=work_data["name"],
+            work_date=work_data["work_date"],
+            students=students_list
+        ))
+    
+    # Ordenar trabajos por fecha (más recientes primero) o por nombre si no hay fecha
+    works_list.sort(
+        key=lambda x: (x.work_date if x.work_date else date.min, x.name),
+        reverse=True
+    )
+    
+    # Construir la respuesta
+    response = FieldTypeStudentsResponse(
+        formative_field_id=formative_field.id,
+        formative_field_name=formative_field.name,
+        work_type_id=work_type.id,
+        work_type_name=work_type.name,
+        works=works_list
     )
     
     return success_response(data=response)

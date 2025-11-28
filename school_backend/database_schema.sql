@@ -277,6 +277,13 @@ CREATE TABLE student_works (
 CREATE INDEX idx_works_student_partial ON student_works(student_id, partial_id);
 CREATE INDEX idx_works_field_teacher ON student_works(formative_field_id, teacher_id);
 
+-- Índices optimizados para flujos de consulta
+CREATE INDEX idx_works_student_field_type ON student_works(student_id, formative_field_id, work_type_id);
+CREATE INDEX idx_works_field_type ON student_works(formative_field_id, work_type_id);
+CREATE INDEX idx_works_field_type_name_date ON student_works(formative_field_id, work_type_id, name, work_date);
+CREATE INDEX idx_works_field_type_partial ON student_works(formative_field_id, work_type_id, partial_id);
+CREATE INDEX idx_works_date ON student_works(work_date DESC);
+
 -- ======================================================
 -- Asistencia (por alumno y parcial)
 -- ======================================================

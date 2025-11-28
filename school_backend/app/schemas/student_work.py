@@ -269,3 +269,47 @@ class FormativeFieldGroupResponse(BaseModel):
     
     model_config = ConfigDict(from_attributes=True)
 
+
+class StudentWithGrade(BaseModel):
+    """Schema para un estudiante con su calificación en un trabajo."""
+    student_id: int = Field(..., description="ID del estudiante")
+    student_name: str = Field(..., description="Nombre completo del estudiante")
+    grade: Optional[Decimal] = Field(None, description="Calificación del estudiante en este trabajo")
+    
+    @field_validator('grade', mode='before')
+    @classmethod
+    def normalize_grade_from_db(cls, v):
+        """Normaliza la calificación cuando viene de la base de datos."""
+        if v is not None:
+            from decimal import Decimal, ROUND_HALF_UP
+            if isinstance(v, (int, float, str)):
+                v = Decimal(str(v))
+            elif not isinstance(v, Decimal):
+                return v
+            normalized = v.quantize(Decimal('0.1'), rounding=ROUND_HALF_UP)
+            return normalized
+        return v
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class WorkWithStudents(BaseModel):
+    """Schema para un trabajo con su lista de estudiantes."""
+    id: int = Field(..., description="ID del trabajo (representativo, puede ser el primero encontrado)")
+    name: str = Field(..., description="Nombre del trabajo")
+    work_date: Optional[date] = Field(None, description="Fecha del trabajo")
+    students: List[StudentWithGrade] = Field(..., description="Lista de estudiantes con sus calificaciones")
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FieldTypeStudentsResponse(BaseModel):
+    """Schema de respuesta para el Flujo 2: Campo Formativo -> Tipo de Trabajo -> Trabajos -> Estudiantes."""
+    formative_field_id: int = Field(..., description="ID del campo formativo")
+    formative_field_name: str = Field(..., description="Nombre del campo formativo")
+    work_type_id: int = Field(..., description="ID del tipo de trabajo")
+    work_type_name: str = Field(..., description="Nombre del tipo de trabajo")
+    works: List[WorkWithStudents] = Field(..., description="Lista de trabajos únicos con sus estudiantes")
+    
+    model_config = ConfigDict(from_attributes=True)
+

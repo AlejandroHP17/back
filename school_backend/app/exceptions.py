@@ -60,4 +60,3 @@ class InactiveUserError(SchoolBackendException):
             status_code=430,
             detail=detail
         )
-
